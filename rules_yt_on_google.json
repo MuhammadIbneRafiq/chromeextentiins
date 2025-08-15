@@ -1,0 +1,19 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "initiatorDomains": ["www.google.com", "google.com"],
+      "requestDomains": [
+        "www.youtube.com",
+        "youtube.com",
+        "youtube-nocookie.com",
+        "i.ytimg.com",
+        "yt3.ggpht.com",
+        "googlevideo.com"
+      ],
+      "resourceTypes": ["sub_frame", "xmlhttprequest", "media", "image", "script"]
+    }
+  }
+]

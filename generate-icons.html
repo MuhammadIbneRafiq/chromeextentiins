@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Extension Icons</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        canvas { border: 1px solid #ccc; margin: 10px; }
+        .icon-preview { display: inline-block; margin: 10px; text-align: center; }
+    </style>
+</head>
+<body>
+    <h1>AI Productivity Guardian - Icon Generator</h1>
+    <p>This page generates simple placeholder icons for the extension. Right-click each canvas and save as PNG.</p>
+    
+    <div class="icon-preview">
+        <canvas id="icon16" width="16" height="16"></canvas>
+        <div>16x16 (icon16.png)</div>
+    </div>
+    
+    <div class="icon-preview">
+        <canvas id="icon32" width="32" height="32"></canvas>
+        <div>32x32 (icon32.png)</div>
+    </div>
+    
+    <div class="icon-preview">
+        <canvas id="icon48" width="48" height="48"></canvas>
+        <div>48x48 (icon48.png)</div>
+    </div>
+    
+    <div class="icon-preview">
+        <canvas id="icon128" width="128" height="128"></canvas>
+        <div>128x128 (icon128.png)</div>
+    </div>
+
+    <script>
+        function drawIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Create gradient background
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            
+            // Fill background
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Add robot emoji (simplified for small sizes)
+            const fontSize = size * 0.6;
+            ctx.fillStyle = 'white';
+            ctx.font = `${fontSize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            if (size >= 48) {
+                ctx.fillText('🤖', size/2, size/2);
+            } else {
+                // For smaller sizes, use a simple design
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(size/2, size/2, size/4, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                ctx.fillStyle = '#667eea';
+                ctx.beginPath();
+                ctx.arc(size/2, size/2, size/6, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+        
+        // Generate all icon sizes
+        drawIcon('icon16', 16);
+        drawIcon('icon32', 32);
+        drawIcon('icon48', 48);
+        drawIcon('icon128', 128);
+        
+        console.log('Icons generated! Right-click each canvas and save as PNG to the icons/ folder.');
+    </script>
+</body>
+</html> 

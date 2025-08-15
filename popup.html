@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Productivity Guardian</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">🤖</div>
+            <h1>AI Productivity Guardian</h1>
+            <div class="status" id="status">
+                <span class="indicator" id="statusIndicator"></span>
+                <span id="statusText">Loading...</span>
+            </div>
+        </header>
+
+        <div class="toggle-section">
+            <label class="toggle">
+                <input type="checkbox" id="enabledToggle">
+                <span class="slider"></span>
+            </label>
+            <span>Enable Protection</span>
+        </div>
+
+        
+        <div class="section">
+            <h3>🔒 Focus Lock</h3>
+            <div class="toggle-section" style="padding:0; background:transparent; border:none;">
+                <label class="toggle">
+                    <input type="checkbox" id="focusLockToggle">
+                    <span class="slider"></span>
+                </label>
+                <span>Lock Focus & Protection (prevents turning off during sessions)</span>
+            </div>
+            <p class="help-text">When locked, toggles are disabled and changes are ignored.</p>
+        </div>
+
+        <div class="section">
+            <h3>📊 Today's Statistics</h3>
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-number" id="blockedCount">0</span>
+                    <span class="stat-label">Sites Blocked</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="timesSaved">0</span>
+                    <span class="stat-label">Minutes Saved</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🎯 Focus Session</h3>
+            <div class="toggle-section" style="padding:0; background:transparent; border:none;">
+                <label class="toggle">
+                    <input type="checkbox" id="focusToggle">
+                    <span class="slider"></span>
+                </label>
+                <span>Enable Focus Session (allow only sites matching allowed metadata)</span>
+            </div>
+            <div class="input-group" style="margin-top:10px;">
+                <input type="text" id="allowedTitleContains" placeholder="Allowed title contains (comma separated)">
+            </div>
+            <div class="input-group">
+                <input type="text" id="allowedDescContains" placeholder="Allowed description contains (comma separated)">
+            </div>
+            <div class="input-group">
+                <input type="text" id="allowedKeywordsContains" placeholder="Allowed keywords contains (comma separated)">
+            </div>
+            <div class="quick-actions">
+                <button id="saveFocusSettings" class="btn-primary">Save Focus Settings</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🚫 Blocked Sites (Manual)</h3>
+            <div class="input-group">
+                <input type="text" id="newBlockedSite" placeholder="e.g., youtube.com">
+                <button id="addBlockedSite" class="btn-secondary">Add</button>
+            </div>
+            <div class="site-list" id="blockedSitesList"></div>
+        </div>
+
+        <div class="section">
+            <h3>✅ Allowed Sites (Whitelist)</h3>
+            <div class="input-group">
+                <input type="text" id="newAllowedSite" placeholder="e.g., stackoverflow.com">
+                <button id="addAllowedSite" class="btn-secondary">Add</button>
+            </div>
+            <div class="site-list" id="allowedSitesList"></div>
+        </div>
+
+        <div class="section">
+            <h3>📈 Recent Activity</h3>
+            <div class="activity-list" id="recentActivity">
+                <p class="no-activity">No recent blocks</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🗓️ Focus Sessions (Presets)</h3>
+            <div class="input-group">
+                <input type="text" id="presetName" placeholder="Preset name (e.g., Algorithms Study)">
+            </div>
+            <div class="input-group">
+                <input type="text" id="presetDomains" placeholder="Allowed domains (e.g., your-course.org, developer.mozilla.org)">
+            </div>
+            <div class="input-group">
+                <input type="text" id="presetTopics" placeholder="Allowed keywords (comma separated)">
+            </div>
+            <div class="input-group">
+                <input type="number" id="presetMaxExtraDomains" placeholder="Max extra domains (beyond allowed list)" min="0" value="0">
+            </div>
+            <div class="input-group">
+                <input type="number" id="presetDuration" placeholder="Duration (minutes)" min="5" value="50">
+                <button id="savePreset" class="btn-secondary">Save Preset</button>
+            </div>
+            <div class="site-list" id="presetsList"></div>
+        </div>
+
+        <div class="section">
+            <h3>📅 Schedule</h3>
+            <div class="toggle-section" style="padding:0; background:transparent; border:none;">
+                <label class="toggle">
+                    <input type="checkbox" id="scheduleEnabled">
+                    <span class="slider"></span>
+                </label>
+                <span>Enable scheduled focus blocks</span>
+            </div>
+            <div class="input-group">
+                <input type="text" id="schedName" placeholder="Block name (e.g., Morning Deep Work)">
+            </div>
+            <div class="input-group">
+                <input type="text" id="schedDomains" placeholder="Allowed domains (comma separated)">
+            </div>
+            <div class="input-group">
+                <input type="text" id="schedTopics" placeholder="Allowed topics (comma separated)">
+            </div>
+            <div class="input-group">
+                <input type="time" id="schedStart"> <input type="time" id="schedEnd">
+            </div>
+            <div class="input-group">
+                <input type="text" id="schedDays" placeholder="Days (0-6 comma separated, 0=Sun, e.g., 1,2,3,4,5)">
+                <button id="addSchedule" class="btn-secondary">Add</button>
+            </div>
+            <div class="site-list" id="scheduleList"></div>
+        </div>
+
+        <div class="section">
+            <h3>🧾 Session History</h3>
+            <div class="site-list" id="historyList"></div>
+        </div>
+
+        <div class="section">
+            <h3>⚡ Quick Actions</h3>
+            <div class="quick-actions">
+                <button id="clearData" class="btn-danger">Clear All Data</button>
+                <button id="exportSettings" class="btn-secondary">Export Settings</button>
+            </div>
+        </div>
+
+        <footer>
+            <p>Made with ❤️ for productivity</p>
+            <p class="version">v1.0.0</p>
+        </footer>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html> 
