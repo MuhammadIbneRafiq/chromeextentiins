@@ -54,7 +54,16 @@ class ContentAnalyzer {
         // Hybrid approach: Both chat-specific and general topic filtering
         
         // 1. Chat site topic filter (stricter - only allows specific query topics)
-        await this.enforceChatTopicFilterIfNeeded();
+        // Wait longer for chat sites to load content
+        if (this.isChatSite()) {
+          console.log('🤖 Chat site detected - waiting for full page load...');
+          // Wait much longer for chat sites to be fully interactive
+          setTimeout(() => this.enforceChatTopicFilterIfNeeded(), 8000); // Wait 8 seconds
+          // Also set up continuous monitoring for chat sites
+          this.setupChatSiteMonitoring();
+        } else {
+          await this.enforceChatTopicFilterIfNeeded();
+        }
         
         // 2. General website topic filter (broader - allows any page with relevant content)
         await this.enforceTopicFilterIfNeeded();
@@ -182,12 +191,16 @@ class ContentAnalyzer {
   // Filter Google search results based on focus topics
   async filterGoogleSearchResults() {
     try {
-      const { allowedMetadata } = await chrome.storage.sync.get(['allowedMetadata']);
-      const topics = (allowedMetadata?.topics || []).map(t => String(t).toLowerCase());
+      const { allowedMetadata, currentSession } = await chrome.storage.sync.get(['allowedMetadata', 'currentSession']);
+      
+      // If there's an active session, use its metadata instead of the general settings
+      const activeMetadata = currentSession?.allowedMetadata || allowedMetadata;
+      const topics = (activeMetadata?.topics || []).map(t => String(t).toLowerCase());
       
       if (topics.length === 0) return;
       
       console.log('🔍 Filtering Google search results for topics:', topics);
+      console.log('📋 Active Session:', currentSession?.name || 'None');
       
       // Get all search result cards
       const searchResults = document.querySelectorAll('div[data-ved], div[jscontroller], div[jsaction]');
@@ -205,13 +218,72 @@ class ContentAnalyzer {
           result.style.display = 'none';
           console.log(`🚫 Hidden result ${index + 1}: "${title.substring(0, 50)}..." - No topic match`);
         } else {
-          console.log(`✅ Showing result ${index + 1}: "${title.substring(0, 50)}..." - Topic match found`);
+          console.log(`✅ Showing result ${index + 1}: "${title.substring(0, 1)}..." - Topic match found`);
         }
       });
       
       console.log('🔍 Google search filtering complete');
     } catch (error) {
       console.error('Error filtering Google results:', error);
+    }
+  }
+
+  // Set up continuous monitoring for chat sites
+  setupChatSiteMonitoring() {
+    if (!this.isChatSite()) return;
+    
+    console.log('🔍 Setting up chat site monitoring...');
+    
+    // Monitor for changes in the chat input
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList' || mutation.type === 'attributes') {
+          // Check if the query has changed
+          this.checkChatQueryChange();
+        }
+      });
+    });
+    
+    // Start observing the document for changes
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['value', 'textContent']
+    });
+    
+    // Also check periodically for safety
+    setInterval(() => {
+      this.checkChatQueryChange();
+    }, 2000); // Check every 2 seconds
+  }
+
+  // Check if chat query has changed and re-evaluate
+  async checkChatQueryChange() {
+    try {
+      const { focusMode, currentSession } = await chrome.storage.sync.get(['focusMode', 'currentSession']);
+      if (!focusMode || !currentSession) return;
+    
+      const data = this.extractContentData();
+      const queryText = data.chatQuery || '';
+      
+      if (queryText.length > 10) { // Only check if there's a substantial query
+        console.log('🔍 Chat query changed, re-evaluating:', queryText.substring(0, 50) + '...');
+        
+        const activeMetadata = currentSession?.allowedMetadata || {};
+        const topics = (activeMetadata?.topics || []).map(t => String(t).toLowerCase());
+        
+        const queryMatches = topics.some(t => queryText.toLowerCase().includes(t));
+        
+        if (!queryMatches) {
+          console.log('🚫 Chat query does not match allowed topics, blocking...');
+          this.blockPage('Focus Session: chat query not allowed');
+        } else {
+          console.log('✅ Chat query matches allowed topics');
+        }
+      }
+    } catch (error) {
+      console.error('Error checking chat query change:', error);
     }
   }
 
@@ -288,19 +360,27 @@ class ContentAnalyzer {
     );
   }
 
+  // Check if current site is a chat site
+  isChatSite() {
+    const host = location.hostname;
+    return /chat\.openai\.com$/.test(host) || /perplexity\.ai$/.test(host) || /claude\.ai$/.test(host) || /bard\.google\.com$/.test(host) || /gemini\.google\.com$/.test(host);
+  }
+
   // Chat site topic filter: stricter filtering for chat AI sites
   async enforceChatTopicFilterIfNeeded() {
-    const host = location.hostname;
-    const isChatSite = /chat\.openai\.com$/.test(host) || /perplexity\.ai$/.test(host) || /claude\.ai$/.test(host) || /bard\.google\.com$/.test(host) || /gemini\.google\.com$/.test(host);
-    if (!isChatSite) return;
+    if (!this.isChatSite()) return;
     
     console.log('🔒 Chat Site Topic Filter Check (Strict Mode)');
     console.log('🏠 Host:', host);
     
-    const { focusMode, allowedMetadata } = await chrome.storage.sync.get(['focusMode', 'allowedMetadata']);
-    const topics = (allowedMetadata?.topics || []).map(t=>String(t).toLowerCase());
+    const { focusMode, allowedMetadata, currentSession } = await chrome.storage.sync.get(['focusMode', 'allowedMetadata', 'currentSession']);
+    
+    // If there's an active session, use its metadata instead of the general settings
+    const activeMetadata = currentSession?.allowedMetadata || allowedMetadata;
+    const topics = (activeMetadata?.topics || []).map(t=>String(t).toLowerCase());
     
     console.log('🎯 Focus Mode Active:', focusMode);
+    console.log('📋 Active Session:', currentSession?.name || 'None');
     console.log('📋 Allowed Topics:', topics);
     
     if (!focusMode || topics.length === 0) {
@@ -326,29 +406,35 @@ class ContentAnalyzer {
     const contentMatches = topics.some(t => pageText.includes(t));
     console.log('   Content Topic Match:', contentMatches ? '✅ FOUND' : '❌ NOT FOUND');
     
-    // For chat sites, require BOTH query AND content to match (stricter)
-    const allowed = queryMatches && contentMatches;
+    // For chat sites, be more lenient - allow if EITHER query OR content matches
+    // This prevents blocking when you're just starting to type
+    const allowed = queryMatches || contentMatches;
     console.log('🎯 Chat Site Result:', allowed ? '✅ ALLOWED' : '❌ BLOCKED');
     
     if (!allowed) {
-      console.log('🚫 BLOCKING: Chat site does not meet strict topic requirements');
+      console.log('🚫 BLOCKING: Chat site does not meet topic requirements');
       this.blockPage('Focus Session: chat site content/query not allowed');
     } else {
-      console.log('✅ ALLOWING: Chat site meets strict topic requirements');
+      console.log('✅ ALLOWING: Chat site meets topic requirements');
     }
   }
 
   // Enhanced topic filter: check any website content against allowed topics
   async enforceTopicFilterIfNeeded() {
-    const { focusMode, allowedMetadata } = await chrome.storage.sync.get(['focusMode', 'allowedMetadata']);
-    const topics = (allowedMetadata?.topics || []).map(t=>String(t).toLowerCase());
+    const { focusMode, allowedMetadata, currentSession } = await chrome.storage.sync.get(['focusMode', 'allowedMetadata', 'currentSession']);
+    
+    // If there's an active session, use its metadata instead of the general settings
+    const activeMetadata = currentSession?.allowedMetadata || allowedMetadata;
+    const topics = (activeMetadata?.topics || []).map(t=>String(t).toLowerCase());
     
     if (!focusMode || topics.length === 0) {
+      console.log('⏭️ No topic filtering needed - Focus mode off or no topics');
       return; // No filtering needed
     }
     
     console.log('🔒 General Topic Filter Check (Any Website)');
     console.log('🎯 Focus Mode Active:', focusMode);
+    console.log('📋 Active Session:', currentSession?.name || 'None');
     console.log('📋 Allowed Topics:', topics);
     
     const data = this.extractContentData();

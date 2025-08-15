@@ -176,6 +176,11 @@ class PopupManager {
       this.exportSettings();
     });
 
+    // Debug session
+    document.getElementById('debugSession')?.addEventListener('click', () => {
+      this.debugSession();
+    });
+
     // Preset save
     document.getElementById('savePreset').addEventListener('click', () => {
       if (this.settings.focusLock) { this.showNotification('Focus is locked', 'info'); return; }
@@ -249,6 +254,9 @@ class PopupManager {
     this.renderSchedule();
     this.renderHistory();
     
+    // Check for active session and update UI accordingly
+    this.checkActiveSession();
+    
     console.log('✅ UI Updated');
   }
 
@@ -296,20 +304,36 @@ class PopupManager {
   startPreset(id) {
     const p = (this.settings.presets||[]).find(x=>x.id===id);
     if (!p) return;
+    
+    console.log('🚀 Starting preset:', p);
+    
+    // Override the main focus session settings with preset values
+    this.settings.focusMode = true;
+    this.settings.allowedMetadata = {
+      titleIncludes: p.topics || [],
+      descriptionIncludes: p.topics || [],
+      keywordsIncludes: p.topics || [],
+      topics: p.topics || []
+    };
+    
+    // Save the updated settings first
+    this.saveSettings();
+    
+    // Then start the session
     chrome.runtime.sendMessage({ action: 'startSession', session: {
       name: p.name,
       allowedDomains: p.allowedDomains,
       allowedMetadata: { 
-        ...this.settings.allowedMetadata, 
-        topics: p.topics || [],
-        titleIncludes: [...(this.settings.allowedMetadata.titleIncludes || []), ...(p.topics || [])],
-        descriptionIncludes: [...(this.settings.allowedMetadata.descriptionIncludes || []), ...(p.topics || [])],
-        keywordsIncludes: [...(this.settings.allowedMetadata.keywordsIncludes || []), ...(p.topics || [])]
+        titleIncludes: p.topics || [],
+        descriptionIncludes: p.topics || [],
+        keywordsIncludes: p.topics || [],
+        topics: p.topics || []
       },
       maxExtraDomains: p.maxExtraDomains || 0,
       durationMin: p.durationMin
     }}, (res)=>{
-      this.showNotification('Session started', 'success');
+      this.showNotification(`Session started: ${p.name}`, 'success');
+      this.updateUI(); // Refresh the UI to show the new settings
     });
   }
 
@@ -617,6 +641,58 @@ class PopupManager {
         this.removeSite(site, type);
       }
     });
+  }
+
+  // Check for active session and update UI
+  async checkActiveSession() {
+    try {
+      const { currentSession } = await chrome.storage.sync.get(['currentSession']);
+      
+      if (currentSession && currentSession.endTime > Date.now()) {
+        // Active session found
+        const timeLeft = Math.ceil((currentSession.endTime - Date.now()) / 60000);
+        console.log('🎯 Active session found:', currentSession.name, 'Time left:', timeLeft, 'minutes');
+        
+        // Update the focus session toggle to show it's active
+        const focusToggle = document.getElementById('focusToggle');
+        if (focusToggle) {
+          focusToggle.checked = true;
+          focusToggle.disabled = true; // Prevent changing during session
+        }
+        
+        // Show session info
+        this.showNotification(`Active: ${currentSession.name} (${timeLeft}m left)`, 'success');
+      } else {
+        // No active session
+        const focusToggle = document.getElementById('focusToggle');
+        if (focusToggle) {
+          focusToggle.disabled = false;
+        }
+      }
+    } catch (error) {
+      console.error('Error checking active session:', error);
+    }
+  }
+
+  // Debug method to show current session state
+  async debugSession() {
+    try {
+      const { currentSession, focusMode, allowedMetadata } = await chrome.storage.sync.get(['currentSession', 'focusMode', 'allowedMetadata']);
+      
+      console.log('🔍 DEBUG SESSION STATE:');
+      console.log('📋 Current Session:', currentSession);
+      console.log('🎯 Focus Mode:', focusMode);
+      console.log('📝 Allowed Metadata:', allowedMetadata);
+      
+      if (currentSession && currentSession.endTime > Date.now()) {
+        const timeLeft = Math.ceil((currentSession.endTime - Date.now()) / 60000);
+        this.showNotification(`Session: ${currentSession.name} (${timeLeft}m left)`, 'info');
+      } else {
+        this.showNotification('No active session', 'info');
+      }
+    } catch (error) {
+      console.error('Error debugging session:', error);
+    }
   }
 }
 
