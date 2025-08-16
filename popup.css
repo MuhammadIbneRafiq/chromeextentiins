@@ -358,4 +358,75 @@ footer {
 .site-list::-webkit-scrollbar-thumb:hover,
 .activity-list::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
+}
+
+/* Debug Console Styles */
+.debug-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.debug-controls button {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.debug-controls .btn-secondary {
+    background: #64748b;
+    color: white;
+}
+
+.debug-controls .btn-secondary:hover {
+    background: #475569;
+}
+
+.debug-controls .btn-primary {
+    background: #3b82f6;
+    color: white;
+}
+
+.debug-controls .btn-primary:hover {
+    background: #2563eb;
+}
+
+.debug-console {
+    max-height: 200px;
+    overflow-y: auto;
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 12px;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    margin-top: 10px;
+}
+
+.debug-log-entry {
+    margin-bottom: 8px;
+    padding: 6px;
+    border-radius: 4px;
+    background: #334155;
+    border-left: 3px solid #3b82f6;
+}
+
+.debug-log-time {
+    color: #94a3b8;
+    font-size: 10px;
+}
+
+.debug-log-message {
+    color: #e2e8f0;
+    margin: 2px 0;
+}
+
+.debug-log-data {
+    color: #94a3b8;
+    font-size: 11px;
+    margin-top: 4px;
+    word-break: break-all;
 } 

@@ -178,8 +178,70 @@
                         <button id="clearData" class="btn-danger">Clear All Data</button>
                         <button id="exportSettings" class="btn-secondary">Export Settings</button>
                         <button id="debugSession" class="btn-secondary">Debug Session</button>
+                        <button id="toggleDebugPanel" class="btn-secondary">🔍 Toggle Debug Panel</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Debug Panel (Hidden by default) -->
+        <div id="debugPanel" class="debug-panel" style="display: none;">
+            <div class="debug-header">
+                <h3>🔍 Debug & Monitoring Panel</h3>
+                <button id="closeDebugPanel" class="btn-secondary">×</button>
+            </div>
+            
+            <div class="debug-content">
+                <!-- Real-time Blocking Logs -->
+                <div class="debug-section">
+                    <h4>🚫 Real-time Blocking Logs</h4>
+                    <div class="debug-controls">
+                        <button id="clearLogs" class="btn-secondary">Clear Logs</button>
+                        <button id="exportLogs" class="btn-secondary">Export Logs</button>
+                        <label class="toggle">
+                            <input type="checkbox" id="autoScrollLogs" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span>Auto-scroll</span>
+                    </div>
+                    <div id="blockingLogs" class="debug-logs">
+                        <p class="no-logs">No blocking activity yet. Try visiting a distracting site!</p>
+                    </div>
+                </div>
+
+                <!-- Current Page Analysis -->
+                <div class="debug-section">
+                    <h4>📄 Current Page Analysis</h4>
+                    <div class="debug-controls">
+                        <button id="analyzeCurrentPage" class="btn-primary">Analyze Current Page</button>
+                        <button id="refreshAnalysis" class="btn-secondary">🔄</button>
+                    </div>
+                    <div id="currentPageAnalysis" class="debug-analysis">
+                        <p class="no-analysis">Click "Analyze Current Page" to see metadata</p>
+                    </div>
+                </div>
+
+                <!-- Session State -->
+                <div class="debug-section">
+                    <h4>🎯 Session State</h4>
+                    <div id="sessionState" class="debug-state">
+                        <p class="no-state">No active session</p>
+                    </div>
+                </div>
+
+                <!-- Storage Inspection -->
+                <div class="debug-section">
+                    <h4>💾 Storage Inspection</h4>
+                    <div class="debug-controls">
+                        <button id="inspectStorage" class="btn-secondary">Inspect Storage</button>
+                        <button id="refreshStorage" class="btn-secondary">🔄</button>
+                    </div>
+                    <div id="storageInspection" class="debug-storage">
+                        <p class="no-storage">Click "Inspect Storage" to see all data</p>
+                    </div>
+                </div>
+            </div>
+        </div>
             </div>
         </div>
 

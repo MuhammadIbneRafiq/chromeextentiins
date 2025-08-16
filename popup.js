@@ -35,6 +35,7 @@ class PopupManager {
     this.updateUI();
     this.loadStats();
     this.loadRecentActivity();
+    this.loadDebugLogs();
     
     // Auto-start default preset if no session is active
     this.autoStartDefaultPreset();
@@ -124,6 +125,11 @@ class PopupManager {
       this.showNotification(this.settings.focusLock ? 'Focus locked' : 'Focus unlocked', 'success');
     });
 
+    // Debug console controls
+    document.getElementById('clearDebugLogs').addEventListener('click', () => this.clearDebugLogs());
+    document.getElementById('refreshDebugLogs').addEventListener('click', () => this.loadDebugLogs());
+    document.getElementById('openConsole').addEventListener('click', () => this.openBrowserConsole());
+
     // Add blocked site
     document.getElementById('addBlockedSite').addEventListener('click', () => {
       const site = document.getElementById('newBlockedSite').value.trim();
@@ -174,6 +180,10 @@ class PopupManager {
     // Export settings
     document.getElementById('exportSettings').addEventListener('click', () => {
       this.exportSettings();
+    });
+
+    document.getElementById('openDashboard').addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
     });
 
     // Debug session
@@ -694,6 +704,64 @@ class PopupManager {
       console.error('Error debugging session:', error);
     }
   }
+
+  // Debug Console Methods
+  async loadDebugLogs() {
+    try {
+      const result = await chrome.storage.local.get(['debugLogs']);
+      const debugLogs = result.debugLogs || [];
+      
+      const debugConsole = document.getElementById('debugConsole');
+      if (!debugConsole) return;
+      
+      if (debugLogs.length === 0) {
+        debugConsole.innerHTML = '<p class="no-activity">No debug logs yet. Navigate to a website to see activity.</p>';
+        return;
+      }
+      
+      // Show last 20 logs
+      const recentLogs = debugLogs.slice(-20).reverse();
+      let html = '';
+      
+      recentLogs.forEach(log => {
+        const time = new Date(log.timestamp).toLocaleTimeString();
+        const dataStr = log.metadata ? JSON.stringify(log.metadata, null, 2) : '';
+        
+        html += `
+          <div class="debug-log-entry">
+            <div class="debug-log-time">${time}</div>
+            <div class="debug-log-message">${log.reason}</div>
+            ${dataStr ? `<div class="debug-log-data">${dataStr}</div>` : ''}
+          </div>
+        `;
+      });
+      
+      debugConsole.innerHTML = html;
+    } catch (error) {
+      console.error('Error loading debug logs:', error);
+    }
+  }
+
+  async clearDebugLogs() {
+    try {
+      await chrome.storage.local.set({ debugLogs: [] });
+      this.loadDebugLogs();
+      this.showNotification('Debug logs cleared', 'success');
+    } catch (error) {
+      console.error('Error clearing debug logs:', error);
+    }
+  }
+
+  openBrowserConsole() {
+    // Open browser console (F12 or right-click -> Inspect -> Console)
+    this.showNotification('Press F12 or right-click → Inspect → Console to open browser console', 'info');
+    
+    // Try to focus on console if possible
+    if (window.chrome && window.chrome.devtools) {
+      // This is a best effort - devtools API is limited
+      console.log('🔍 AI Guardian Debug Info - Check the Console tab for detailed logs');
+    }
+  }
 }
 
 // Initialize popup manager when DOM is loaded
@@ -706,5 +774,6 @@ setInterval(() => {
   if (window.popupManager) {
     window.popupManager.loadStats();
     window.popupManager.loadRecentActivity();
+    window.popupManager.loadDebugLogs();
   }
 }, 30000); 

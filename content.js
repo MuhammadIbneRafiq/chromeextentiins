@@ -19,6 +19,26 @@ class ContentAnalyzer {
     } else {
       this.analyzeContent();
     }
+
+    // Set up debug message listener
+    this.setupDebugListener();
+  }
+
+  // Set up listener for debug messages from background script
+  setupDebugListener() {
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      if (request.action === 'debugLog') {
+        // Display debug messages in the regular browser console
+        const style = 'background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold;';
+        console.log(`%c${request.message}`, style, request.data || '');
+        
+        // Also log to page console for visibility
+        if (window.console && window.console.log) {
+          console.log(`[AI Guardian Debug] ${request.message}`, request.data || '');
+        }
+      }
+      return true;
+    });
   }
 
   async analyzeContent() {
@@ -566,4 +586,13 @@ class ContentAnalyzer {
 }
 
 // Initialize content analyzer
-new ContentAnalyzer(); 
+new ContentAnalyzer();
+
+// Listen for messages from dashboard
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'analyzeCurrentPage') {
+    const contentData = window.contentAnalyzer.extractContentData();
+    sendResponse({ contentData });
+  }
+  return true; // Keep message channel open for async response
+}); 

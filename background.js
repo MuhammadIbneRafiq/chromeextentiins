@@ -19,7 +19,41 @@ class ProductivityGuardian {
     this.sessionTimerId = null;
     this.schedule = [];
     this.scheduleEnabled = false;
+    this.debugMode = true; // Enable debug mode by default
     this.init();
+  }
+
+  // Enhanced logging that will be visible in regular console
+  log(message, data = null) {
+    const timestamp = new Date().toLocaleTimeString();
+    const logMessage = `[AI Guardian ${timestamp}] ${message}`;
+    
+    // Service worker console (Extensions page)
+    console.log(logMessage, data || '');
+    
+    // Send to all tabs for regular console visibility
+    this.broadcastToAllTabs({
+      action: 'debugLog',
+      message: logMessage,
+      data: data,
+      timestamp: timestamp
+    });
+  }
+
+  // Broadcast message to all tabs
+  async broadcastToAllTabs(message) {
+    try {
+      const tabs = await chrome.tabs.query({});
+      tabs.forEach(tab => {
+        if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+          chrome.tabs.sendMessage(tab.id, message).catch(() => {
+            // Tab might not have content script loaded yet
+          });
+        }
+      });
+    } catch (error) {
+      // Ignore errors
+    }
   }
 
   async evaluateJustification(text) {
@@ -76,7 +110,7 @@ class ProductivityGuardian {
       this.checkApiConnection();
     }
     
-    console.log(`AI Productivity Guardian v${this.version} initialized`);
+    this.log(`AI Productivity Guardian v${this.version} initialized`);
   }
 
   setupListeners() {
@@ -106,7 +140,7 @@ class ProductivityGuardian {
         } else if (request.action === 'checkApiStatus') {
           await this.checkApiConnection();
           sendResponse({ working: this.apiWorking, lastCheck: this.lastApiCheck });
-      } else if (request.action === 'requestBypass') {
+        } else if (request.action === 'requestBypass') {
         const granted = await this.evaluateJustification(request.justification);
         if (granted && sender?.tab?.url) {
           try {
@@ -164,12 +198,12 @@ class ProductivityGuardian {
       this.lastApiCheck = Date.now();
       
       if (!response.ok) {
-        console.warn('Groq API check failed:', response.status, response.statusText);
+        this.log('⚠️ Groq API check failed:', { status: response.status, statusText: response.statusText });
       }
       
       return this.apiWorking;
     } catch (error) {
-      console.error('API connection check failed:', error);
+      this.log('❌ API connection check failed:', error.message);
       this.apiWorking = false;
       this.lastApiCheck = Date.now();
       return false;
@@ -178,32 +212,32 @@ class ProductivityGuardian {
 
   async analyzeAndBlockIfNeeded(tabId, url) {
     try {
-      console.log('🔍 AI Productivity Guardian - Analyzing URL');
-      console.log('📍 URL:', url);
+      this.log('🔍 AI Productivity Guardian - Analyzing URL');
+      this.log('📍 URL:', url);
       
       // Skip chrome:// and extension pages
       if (url.startsWith('chrome://') || url.startsWith('chrome-extension://') || url.startsWith('brave://')) {
-        console.log('⏭️ Skipping chrome/extension page');
+        this.log('⏭️ Skipping chrome/extension page');
         return;
       }
 
       const hostname = new URL(url).hostname;
-      console.log('🏠 Hostname:', hostname);
+      this.log('🏠 Hostname:', hostname);
 
       // Check if explicitly allowed
       if (this.allowedSites.some(site => hostname.includes(site))) {
-        console.log('✅ ALLOWED: Site is in whitelist');
+        this.log('✅ ALLOWED: Site is in whitelist');
         return;
       }
 
       // Active focus session enforcement (domain whitelist)
       if (this.isSessionActive?.()) {
-        console.log('🎯 Focus Session Active - Checking domain whitelist');
+        this.log('🎯 Focus Session Active - Checking domain whitelist');
         const allowed = (this.currentSession.allowedDomains || []);
         const inAllowedDomain = allowed.some(d => hostname.endsWith(d) || hostname.includes(d));
         
-        console.log('📋 Allowed Domains:', allowed);
-        console.log('🔍 Domain Match:', inAllowedDomain ? '✅ ALLOWED' : '❌ NOT ALLOWED');
+        this.log('📋 Allowed Domains:', allowed);
+        this.log('🔍 Domain Match:', inAllowedDomain ? '✅ ALLOWED' : '❌ NOT ALLOWED');
         
         if (!inAllowedDomain) {
           // Allow a small number of extra domains if configured (e.g., cdn, auth)
@@ -213,45 +247,45 @@ class ProductivityGuardian {
           const setForId = extras[curId] || new Set();
           const setArr = Array.isArray(setForId) ? setForId : []; // storage serializes sets
           
-          console.log('🔢 Extra Domains Used:', setArr.length);
-          console.log('🔢 Max Extra Domains Allowed:', this.currentSession.maxExtraDomains || 0);
+          this.log('🔢 Extra Domains Used:', setArr.length);
+          this.log('🔢 Max Extra Domains Allowed:', this.currentSession.maxExtraDomains || 0);
           
           if (setArr.includes(hostname) || (this.currentSession.maxExtraDomains||0) > setArr.length) {
             if (!setArr.includes(hostname)) {
               setArr.push(hostname);
               extras[curId] = setArr;
               await chrome.storage.local.set({ sessionExtras: extras });
-              console.log('✅ ALLOWED: Extra domain added to session');
+              this.log('✅ ALLOWED: Extra domain added to session');
             } else {
-              console.log('✅ ALLOWED: Extra domain already in session');
+              this.log('✅ ALLOWED: Extra domain already in session');
             }
           } else {
-            console.log('🚫 BLOCKING: Domain not allowed in focus session');
+            this.log('🚫 BLOCKING: Domain not allowed in focus session');
             await this.blockTab(tabId, hostname, 'Focus Session: domain not in allowed list');
             return;
           }
         } else {
-          console.log('✅ ALLOWED: Domain matches focus session whitelist');
+          this.log('✅ ALLOWED: Domain matches focus session whitelist');
         }
       }
 
       // Check temporary bypass window
       const bypassOk = await this.isBypassActive(hostname);
       if (bypassOk) {
-        console.log('⏰ ALLOWED: Site has active bypass');
+        this.log('⏰ ALLOWED: Site has active bypass');
         return;
       }
 
       // Check if explicitly blocked
       if (this.blockedSites.some(site => hostname.includes(site))) {
-        console.log('🚫 BLOCKING: Site is explicitly blocked');
+        this.log('🚫 BLOCKING: Site is explicitly blocked');
         await this.blockTab(tabId, hostname, 'Explicitly blocked site');
         return;
       }
 
       // Focus Mode: allow only by metadata, otherwise block immediately
       if (this.focusMode) {
-        console.log('🎯 Focus Mode Active - Will check metadata via content script');
+        this.log('🎯 Focus Mode Active - Will check metadata via content script');
         try {
           // Ask content script for extracted metadata (best effort)
           const [tab] = await chrome.tabs.query({ tabId });
@@ -261,26 +295,26 @@ class ProductivityGuardian {
 
       // Use AI analysis for unknown sites if API is working
       if (this.groqApiKey && this.apiWorking) {
-        console.log('🤖 AI Analysis - Checking if site is distracting');
+        this.log('🤖 AI Analysis - Checking if site is distracting');
         const isDistracting = await this.analyzeUrlWithAI(url, hostname);
         if (isDistracting) {
-          console.log('🚫 BLOCKING: AI detected distracting content');
+          this.log('🚫 BLOCKING: AI detected distracting content');
           await this.blockTab(tabId, hostname, 'AI detected distracting content');
         } else {
-          console.log('✅ ALLOWED: AI analysis passed');
+          this.log('✅ ALLOWED: AI analysis passed');
         }
       } else if (this.groqApiKey && Date.now() - this.lastApiCheck > 300000) {
-        // Check API every 5 minutes if we have a key
-        console.log('🔄 Checking API connection...');
+        // Check API connection every 5 minutes if we have a key
+        this.log('🔄 Checking API connection...');
         this.checkApiConnection();
       } else {
-        console.log('⏭️ Skipping AI analysis - No API key or API not working');
+        this.log('⏭️ Skipping AI analysis - No API key or API not working');
       }
     } catch (error) {
       console.error('Error analyzing URL:', error);
     }
-    console.log('🔍 AI Productivity Guardian - URL Analysis Complete');
-    console.log('─'.repeat(50));
+    this.log('🔍 AI Productivity Guardian - URL Analysis Complete');
+    this.log('─'.repeat(50));
   }
 
   tickSchedule() {
@@ -392,6 +426,9 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
     if (!this.groqApiKey) return { shouldBlock: false, reason: 'No API key' };
     if (!this.apiWorking) return { shouldBlock: false, reason: 'API not working' };
 
+    // Store debug log for content analysis
+    await this.storeDebugLog(contentData.url || 'unknown', 'Content analysis', 'analyzed', contentData);
+
     try {
       const prompt = `Analyze this webpage content and determine if it's distracting for productivity/studying:
 
@@ -454,7 +491,7 @@ Be strict for productivity - when uncertain, choose BLOCK.`;
       await chrome.tabs.update(tabId, { url: blockPageUrl });
       
       // Log the block
-      console.log(`Blocked ${hostname}: ${reason}`);
+      this.log(`🚫 Blocked ${hostname}: ${reason}`);
       
       // Store block event
       const blockData = {
@@ -473,8 +510,37 @@ Be strict for productivity - when uncertain, choose BLOCK.`;
       }
       
       await chrome.storage.local.set({ blockedEvents });
+      
+      // Also store detailed debug log
+      await this.storeDebugLog(hostname, reason, 'blocked');
     } catch (error) {
       console.error('Error blocking tab:', error);
+    }
+  }
+
+  async storeDebugLog(hostname, reason, action, metadata = null) {
+    try {
+      const debugLog = {
+        hostname,
+        reason,
+        action, // 'blocked', 'allowed', 'analyzed'
+        metadata,
+        timestamp: Date.now(),
+        time: new Date().toLocaleTimeString()
+      };
+      
+      const result = await chrome.storage.local.get(['debugLogs']);
+      const debugLogs = result.debugLogs || [];
+      debugLogs.push(debugLog);
+      
+      // Keep only last 200 debug logs
+      if (debugLogs.length > 200) {
+        debugLogs.splice(0, debugLogs.length - 200);
+      }
+      
+      await chrome.storage.local.set({ debugLogs });
+    } catch (error) {
+      console.error('Error storing debug log:', error);
     }
   }
 
@@ -515,9 +581,9 @@ const guardian = new ProductivityGuardian();
 // Handle installation
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    console.log('AI Productivity Guardian installed for the first time');
+    guardian.log('🎉 AI Productivity Guardian installed for the first time');
   } else if (details.reason === 'update') {
-    console.log('AI Productivity Guardian updated');
+    guardian.log('🔄 AI Productivity Guardian updated');
   }
 }); 
 

@@ -101,6 +101,18 @@
         </div>
 
         <div class="section">
+            <h3>🐛 Debug Console</h3>
+            <div class="debug-controls">
+                <button id="clearDebugLogs" class="btn-secondary">Clear Logs</button>
+                <button id="refreshDebugLogs" class="btn-secondary">Refresh</button>
+                <button id="openConsole" class="btn-primary">Open Browser Console</button>
+            </div>
+            <div class="debug-console" id="debugConsole">
+                <p class="no-activity">No debug logs yet. Navigate to a website to see activity.</p>
+            </div>
+        </div>
+
+        <div class="section">
             <h3>🗓️ Focus Sessions (Presets)</h3>
             <div class="input-group">
                 <input type="text" id="presetName" placeholder="Preset name (e.g., Algorithms Study)">
@@ -159,6 +171,7 @@
             <div class="quick-actions">
                 <button id="clearData" class="btn-danger">Clear All Data</button>
                 <button id="exportSettings" class="btn-secondary">Export Settings</button>
+                <button id="openDashboard" class="btn-primary">🖥️ Open Dashboard</button>
             </div>
         </div>
 
