@@ -1,5 +1,3 @@
-// AI Productivity Guardian - Content Script
-
 class ContentAnalyzer {
   constructor() {
     this.analyzed = false;
@@ -12,7 +10,7 @@ class ContentAnalyzer {
     this.init();
   }
 
-  init() {
+  async init() {
     // Wait for DOM to be ready
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => this.analyzeContent());
@@ -22,6 +20,23 @@ class ContentAnalyzer {
 
     // Set up debug message listener
     this.setupDebugListener();
+    
+    // Log initialization
+    this.log('🚀 Content Analyzer initialized');
+  }
+
+  // Enhanced logging that will be visible in regular console
+  log(message, data = null) {
+    const timestamp = new Date().toLocaleTimeString();
+    const logMessage = `[AI Guardian ${timestamp}] ${message}`;
+    
+    // Content script console (blocked page)
+    console.log(logMessage, data || '');
+    
+    // Also log to regular browser console for visibility
+    if (window.console && window.console.log) {
+      console.log(`%c${logMessage}`, 'background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold;', data || '');
+    }
   }
 
   // Set up listener for debug messages from background script
@@ -49,6 +64,7 @@ class ContentAnalyzer {
     try {
       // Skip if already on block page
       if (window.location.href.includes('block-page.html')) {
+        this.log('🚫 Already on block page, skipping analysis');
         return;
       }
 
@@ -56,6 +72,14 @@ class ContentAnalyzer {
       const cfg = await chrome.storage.sync.get(['focusMode', 'allowedMetadata']);
       this.focusMode = !!cfg.focusMode;
       if (cfg.allowedMetadata) this.allowedMetadata = cfg.allowedMetadata;
+
+      this.log('🎯 Focus Mode Status:', { 
+        focusMode: this.focusMode, 
+        allowedMetadata: this.allowedMetadata,
+        hasTitleRules: this.allowedMetadata.titleIncludes.length > 0,
+        hasDescriptionRules: this.allowedMetadata.descriptionIncludes.length > 0,
+        hasKeywordsRules: this.allowedMetadata.keywordsIncludes.length > 0
+      });
 
       // Apply inline YouTube block on Google Search (videos tab and SERP inline players)
       this.blockInlineYouTubeOnGoogle();
@@ -65,10 +89,23 @@ class ContentAnalyzer {
         const contentData = this.extractContentData();
         
         // If focus mode is ON, enforce allow-by-metadata first
-        if (this.focusMode && !this.matchesAllowedMetadata(contentData)) {
-          const reason = 'Focus Session: site does not match allowed metadata';
-          this.blockPage(reason);
-          return;
+        if (this.focusMode) {
+          this.log('🎯 Focus Mode Active - Checking metadata rules...');
+          this.log('📋 Current metadata rules:', this.allowedMetadata);
+          
+          const metadataMatch = this.matchesAllowedMetadata(contentData);
+          this.log('🎯 Metadata check result:', metadataMatch ? '✅ MATCH' : '❌ NO MATCH');
+          
+          if (!metadataMatch) {
+            const reason = 'Focus Session: site does not match allowed metadata';
+            this.log('🚫 BLOCKING: Focus mode active but metadata does not match', { contentData, reason });
+            this.blockPage(reason);
+            return;
+          } else {
+            this.log('✅ ALLOWING: Page matches focus mode metadata rules');
+          }
+        } else {
+          this.log('⏭️ Focus mode not active - skipping metadata check');
         }
 
         // Hybrid approach: Both chat-specific and general topic filtering
@@ -76,9 +113,9 @@ class ContentAnalyzer {
         // 1. Chat site topic filter (stricter - only allows specific query topics)
         // Wait longer for chat sites to load content
         if (this.isChatSite()) {
-          console.log('🤖 Chat site detected - waiting for full page load...');
+          this.log('🤖 Chat site detected - waiting for full page load...');
           // Wait much longer for chat sites to be fully interactive
-          setTimeout(() => this.enforceChatTopicFilterIfNeeded(), 8000); // Wait 8 seconds
+          setTimeout(() => this.enforceChatTopicFilterIfNeeded(), 80000); // Wait 80 seconds
           // Also set up continuous monitoring for chat sites
           this.setupChatSiteMonitoring();
         } else {
@@ -89,6 +126,7 @@ class ContentAnalyzer {
         await this.enforceTopicFilterIfNeeded();
 
         // Send to background script for AI analysis
+        this.log('🤖 Sending content data to background script for AI analysis:', contentData);
         const response = await chrome.runtime.sendMessage({
           action: 'analyzeContent',
           data: contentData
@@ -96,7 +134,10 @@ class ContentAnalyzer {
 
         if (response && response.shouldBlock) {
           // Block the page by replacing content
+          this.log('🚫 AI analysis result: BLOCK', response);
           this.blockPage(response.reason);
+        } else {
+          this.log('✅ AI analysis result: ALLOW', response);
         }
       }, 2000); // Wait 2 seconds for page content to load
 
@@ -112,11 +153,46 @@ class ContentAnalyzer {
 
     const { titleIncludes, descriptionIncludes, keywordsIncludes } = this.allowedMetadata;
 
-    const titleOk = titleIncludes.length === 0 || titleIncludes.some(k => title.includes(k.toLowerCase()));
-    const descOk = descriptionIncludes.length === 0 || descriptionIncludes.some(k => description.includes(k.toLowerCase()));
-    const keyOk = keywordsIncludes.length === 0 || keywordsIncludes.some(k => keywords.includes(k.toLowerCase()));
+    this.log('🔍 Checking metadata against allowed rules:', { titleIncludes, descriptionIncludes, keywordsIncludes });
+    this.log('🔍 Page metadata:', { title, description, keywords });
 
-    return titleOk && descOk && keyOk;
+    // Check if ANY metadata field has rules and matches
+    let hasAnyRules = false;
+    let anyMatch = false;
+
+    // Check title includes
+    if (titleIncludes.length > 0) {
+      hasAnyRules = true;
+      const titleOk = titleIncludes.some(k => title.includes(k.toLowerCase()));
+      this.log(`   Title keyword check: ${titleOk ? '✅ MATCH' : '❌ NO MATCH'} for keywords:`, titleIncludes);
+      anyMatch = anyMatch || titleOk;
+    }
+
+    // Check description includes
+    if (descriptionIncludes.length > 0) {
+      hasAnyRules = true;
+      const descOk = descriptionIncludes.some(k => description.includes(k.toLowerCase()));
+      this.log(`   Description keyword check: ${descOk ? '✅ MATCH' : '❌ NO MATCH'} for keywords:`, descriptionIncludes);
+      anyMatch = anyMatch || descOk;
+    }
+
+    // Check keywords includes
+    if (keywordsIncludes.length > 0) {
+      hasAnyRules = true;
+      const keyOk = keywordsIncludes.some(k => keywords.includes(k.toLowerCase()));
+      this.log(`   Meta keywords check: ${keyOk ? '✅ MATCH' : '❌ NO MATCH'} for keywords:`, keywordsIncludes);
+      anyMatch = anyMatch || keyOk;
+    }
+
+    // If no rules are set, allow everything
+    if (!hasAnyRules) {
+      this.log('🎯 No metadata rules set - allowing page');
+      return true;
+    }
+
+    // If rules are set, at least one must match
+    this.log('🎯 Final metadata check result:', anyMatch ? '✅ ALLOWED' : '❌ BLOCKED');
+    return anyMatch;
   }
 
   extractContentData() {
@@ -131,23 +207,23 @@ class ContentAnalyzer {
     };
 
     // Enhanced logging for debugging
-    console.log('🔍 AI Productivity Guardian - Content Analysis');
-    console.log('📍 URL:', data.url);
-    console.log('📝 Title:', data.title);
+    this.log('🔍 AI Productivity Guardian - Content Analysis');
+    this.log('📍 URL:', data.url);
+    this.log('📝 Title:', data.title);
 
     // Extract meta description
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
       data.description = metaDescription.getAttribute('content') || '';
     }
-    console.log('📄 Meta Description:', data.description);
+    this.log('📄 Meta Description:', data.description);
 
     // Extract meta keywords
     const metaKeywords = document.querySelector('meta[name="keywords"]');
     if (metaKeywords) {
       data.keywords = metaKeywords.getAttribute('content') || '';
     }
-    console.log('🏷️ Meta Keywords:', data.keywords);
+    this.log('🏷️ Meta Keywords:', data.keywords);
 
     // Extract Open Graph data
     const ogTitle = document.querySelector('meta[property="og:title"]');
@@ -158,69 +234,74 @@ class ContentAnalyzer {
     if (ogDescription) data.description = ogDescription.getAttribute('content') || data.description;
     if (ogType) data.ogType = ogType.getAttribute('content') || '';
     
-    console.log('🔗 Open Graph Title:', ogTitle?.getAttribute('content') || 'None');
-    console.log('🔗 Open Graph Description:', ogDescription?.getAttribute('content') || 'None');
-    console.log('🔗 Open Graph Type:', ogType?.getAttribute('content') || 'None');
+    this.log('🔗 Open Graph Title:', ogTitle?.getAttribute('content') || 'None');
+    this.log('🔗 Open Graph Description:', ogDescription?.getAttribute('content') || 'None');
+    this.log('🔗 Open Graph Type:', ogType?.getAttribute('content') || 'None');
 
     // Extract text content (first 1000 characters)
     const bodyText = document.body ? document.body.innerText : '';
     data.textContent = bodyText.substring(0, 1000);
-    console.log('📖 Text Content Preview:', data.textContent.substring(0, 200) + '...');
+    this.log('📖 Text Content Preview:', data.textContent.substring(0, 200) + '...');
 
     // Chat site guards: capture the current query/topic heuristically
     const host = location.hostname;
     if (/chat\.openai\.com$/.test(host)) {
       const q = document.querySelector('[data-testid="composer"] textarea, textarea')?.value || '';
       data.chatQuery = q;
-      console.log('🤖 ChatGPT Query:', q || 'No active query');
+      this.log('🤖 ChatGPT Query:', q || 'No active query');
     } else if (/perplexity\.ai$/.test(host)) {
       const q = document.querySelector('textarea, input[name="q"]')?.value || '';
       data.chatQuery = q;
-      console.log('🔍 Perplexity Query:', q || 'No active query');
+      this.log('🔍 Perplexity Query:', q || 'No active query');
     } else if (/claude\.ai$/.test(host)) {
       const q = document.querySelector('textarea')?.value || '';
       data.chatQuery = q;
-      console.log('🧠 Claude Query:', q || 'No active query');
+      this.log('🧠 Claude Query:', q || 'No active query');
     } else if (/bard\.google\.com$/.test(host) || /gemini\.google\.com$/.test(host)) {
       const q = document.querySelector('textarea, input[type="text"]')?.value || '';
       data.chatQuery = q;
-      console.log('🌐 Google AI Query:', q || 'No active query');
+      this.log('🌐 Google AI Query:', q || 'No active query');
     }
 
     // Look for streaming/entertainment indicators
     data.hasVideoElements = document.querySelectorAll('video').length > 0;
     data.hasStreamingKeywords = this.hasStreamingKeywords(data.title + ' ' + data.description + ' ' + data.textContent);
     
-    console.log('🎥 Video Elements:', data.hasVideoElements);
-    console.log('🎬 Streaming Keywords Detected:', data.hasStreamingKeywords);
+    this.log('🎥 Video Elements:', data.hasVideoElements);
+    this.log('🎬 Streaming Keywords Detected:', data.hasStreamingKeywords);
 
     // Check for social media patterns
     data.isSocialMedia = this.isSocialMediaSite();
-    console.log('📱 Social Media Detected:', data.isSocialMedia);
+    this.log('📱 Social Media Detected:', data.isSocialMedia);
 
     // Check for entertainment/movie patterns
     data.isEntertainment = this.isEntertainmentSite();
-    console.log('🎭 Entertainment Detected:', data.isEntertainment);
+    this.log('🎭 Entertainment Detected:', data.isEntertainment);
 
-    console.log('📊 Final Extracted Data:', data);
-    console.log('🔍 AI Productivity Guardian - Content Analysis Complete');
-    console.log('─'.repeat(50));
+    this.log('📊 Final Extracted Data:', data);
+    this.log('🔍 AI Productivity Guardian - Content Analysis Complete');
+    this.log('─'.repeat(50));
     return data;
   }
 
-  // Filter Google search results based on focus topics
+  // Filter Google search results based on focus metadata
   async filterGoogleSearchResults() {
     try {
       const { allowedMetadata, currentSession } = await chrome.storage.sync.get(['allowedMetadata', 'currentSession']);
       
       // If there's an active session, use its metadata instead of the general settings
       const activeMetadata = currentSession?.allowedMetadata || allowedMetadata;
+      
+      // Check both old 'topics' format and new metadata format
       const topics = (activeMetadata?.topics || []).map(t => String(t).toLowerCase());
+      const titleIncludes = (activeMetadata?.titleIncludes || []).map(t => String(t).toLowerCase());
+      const descriptionIncludes = (activeMetadata?.descriptionIncludes || []).map(t => String(t).toLowerCase());
+      const keywordsIncludes = (activeMetadata?.keywordsIncludes || []).map(t => String(t).toLowerCase());
       
-      if (topics.length === 0) return;
+      if (topics.length === 0 && titleIncludes.length === 0 && descriptionIncludes.length === 0 && keywordsIncludes.length === 0) return;
       
-      console.log('🔍 Filtering Google search results for topics:', topics);
-      console.log('📋 Active Session:', currentSession?.name || 'None');
+      this.log('🔍 Filtering Google search results for metadata:', { topics, titleIncludes, descriptionIncludes, keywordsIncludes });
+      this.log('📋 Active Session:', currentSession?.name || 'None');
       
       // Get all search result cards
       const searchResults = document.querySelectorAll('div[data-ved], div[jscontroller], div[jsaction]');
@@ -230,19 +311,31 @@ class ContentAnalyzer {
         const snippet = result.querySelector('div[data-content-feature="1"], span[data-ved]')?.textContent || '';
         const text = `${title} ${snippet}`.toLowerCase();
         
-        // Check if result contains any allowed topics
-        const matches = topics.some(topic => text.includes(topic));
+        // Check if result contains any allowed metadata
+        let matches = false;
+        if (topics.length > 0) {
+          matches = matches || topics.some(topic => text.includes(topic));
+        }
+        if (titleIncludes.length > 0) {
+          matches = matches || titleIncludes.some(topic => text.includes(topic));
+        }
+        if (descriptionIncludes.length > 0) {
+          matches = matches || descriptionIncludes.some(topic => text.includes(topic));
+        }
+        if (keywordsIncludes.length > 0) {
+          matches = matches || keywordsIncludes.some(topic => text.includes(topic));
+        }
         
         if (!matches) {
-          // Hide results that don't match topics
+          // Hide results that don't match metadata
           result.style.display = 'none';
-          console.log(`🚫 Hidden result ${index + 1}: "${title.substring(0, 50)}..." - No topic match`);
+          this.log(`🚫 Hidden result ${index + 1}: "${title.substring(0, 50)}..." - No metadata match`);
         } else {
-          console.log(`✅ Showing result ${index + 1}: "${title.substring(0, 1)}..." - Topic match found`);
+          this.log(`✅ Showing result ${index + 1}: "${title.substring(0, 50)}..." - Metadata match found`);
         }
       });
       
-      console.log('🔍 Google search filtering complete');
+      this.log('🔍 Google search filtering complete');
     } catch (error) {
       console.error('Error filtering Google results:', error);
     }
@@ -252,7 +345,7 @@ class ContentAnalyzer {
   setupChatSiteMonitoring() {
     if (!this.isChatSite()) return;
     
-    console.log('🔍 Setting up chat site monitoring...');
+    this.log('🔍 Setting up chat site monitoring...');
     
     // Monitor for changes in the chat input
     const observer = new MutationObserver((mutations) => {
@@ -288,18 +381,35 @@ class ContentAnalyzer {
       const queryText = data.chatQuery || '';
       
       if (queryText.length > 10) { // Only check if there's a substantial query
-        console.log('🔍 Chat query changed, re-evaluating:', queryText.substring(0, 50) + '...');
+        this.log('🔍 Chat query changed, re-evaluating:', queryText.substring(0, 50) + '...');
         
         const activeMetadata = currentSession?.allowedMetadata || {};
-        const topics = (activeMetadata?.topics || []).map(t => String(t).toLowerCase());
         
-        const queryMatches = topics.some(t => queryText.toLowerCase().includes(t));
+        // Check both old 'topics' format and new metadata format
+        const topics = (activeMetadata?.topics || []).map(t => String(t).toLowerCase());
+        const titleIncludes = (activeMetadata?.titleIncludes || []).map(t => String(t).toLowerCase());
+        const descriptionIncludes = (activeMetadata?.descriptionIncludes || []).map(t => String(t).toLowerCase());
+        const keywordsIncludes = (activeMetadata?.keywordsIncludes || []).map(t => String(t).toLowerCase());
+        
+        let queryMatches = false;
+        if (topics.length > 0) {
+          queryMatches = queryMatches || topics.some(t => queryText.toLowerCase().includes(t));
+        }
+        if (titleIncludes.length > 0) {
+          queryMatches = queryMatches || titleIncludes.some(t => queryText.toLowerCase().includes(t));
+        }
+        if (descriptionIncludes.length > 0) {
+          queryMatches = queryMatches || descriptionIncludes.some(t => queryText.toLowerCase().includes(t));
+        }
+        if (keywordsIncludes.length > 0) {
+          queryMatches = queryMatches || keywordsIncludes.some(t => queryText.toLowerCase().includes(t));
+        }
         
         if (!queryMatches) {
-          console.log('🚫 Chat query does not match allowed topics, blocking...');
+          this.log('🚫 Chat query does not match allowed metadata, blocking...');
           this.blockPage('Focus Session: chat query not allowed');
         } else {
-          console.log('✅ Chat query matches allowed topics');
+          this.log('✅ Chat query matches allowed metadata');
         }
       }
     } catch (error) {
@@ -312,7 +422,7 @@ class ContentAnalyzer {
       const isGoogle = /(^|\.)google\.(com|[a-z]{2,3})(\.[a-z]{2})?$/.test(location.hostname);
       if (!isGoogle) return;
 
-      console.log('🔍 Google Search Detected - Applying Enhanced Blocking');
+      this.log('🔍 Google Search Detected - Applying Enhanced Blocking');
 
       const nuke = () => {
         // Remove inline ytd-player, youtube iframes, and preview players inside SERP
@@ -390,21 +500,29 @@ class ContentAnalyzer {
   async enforceChatTopicFilterIfNeeded() {
     if (!this.isChatSite()) return;
     
-    console.log('🔒 Chat Site Topic Filter Check (Strict Mode)');
-    console.log('🏠 Host:', host);
+    this.log('🔒 Chat Site Topic Filter Check (Strict Mode)');
+    this.log('🏠 Host:', location.hostname);
     
     const { focusMode, allowedMetadata, currentSession } = await chrome.storage.sync.get(['focusMode', 'allowedMetadata', 'currentSession']);
     
     // If there's an active session, use its metadata instead of the general settings
     const activeMetadata = currentSession?.allowedMetadata || allowedMetadata;
+    
+    // Check both old 'topics' format and new metadata format
     const topics = (activeMetadata?.topics || []).map(t=>String(t).toLowerCase());
+    const titleIncludes = (activeMetadata?.titleIncludes || []).map(t=>String(t).toLowerCase());
+    const descriptionIncludes = (activeMetadata?.descriptionIncludes || []).map(t=>String(t).toLowerCase());
+    const keywordsIncludes = (activeMetadata?.keywordsIncludes || []).map(t=>String(t).toLowerCase());
     
-    console.log('🎯 Focus Mode Active:', focusMode);
-    console.log('📋 Active Session:', currentSession?.name || 'None');
-    console.log('📋 Allowed Topics:', topics);
+    this.log('🎯 Focus Mode Active:', focusMode);
+    this.log('📋 Active Session:', currentSession?.name || 'None');
+    this.log('📋 Allowed Topics:', topics);
+    this.log('📋 Allowed Title Keywords:', titleIncludes);
+    this.log('📋 Allowed Description Keywords:', descriptionIncludes);
+    this.log('📋 Allowed Keywords:', keywordsIncludes);
     
-    if (!focusMode || topics.length === 0) {
-      console.log('⏭️ Skipping chat topic filter - Focus mode off or no topics');
+    if (!focusMode || (topics.length === 0 && titleIncludes.length === 0 && descriptionIncludes.length === 0 && keywordsIncludes.length === 0)) {
+      this.log('⏭️ Skipping chat topic filter - Focus mode off or no metadata rules');
       return;
     }
     
@@ -414,70 +532,150 @@ class ContentAnalyzer {
     const queryText = data.chatQuery || '';
     const pageText = `${data.title} ${data.description} ${data.textContent}`.toLowerCase();
     
-    console.log('🔍 Chat Site Strict Check:');
-    console.log('   Current Query:', queryText);
-    console.log('   Page Content Preview:', pageText.substring(0, 200) + '...');
+    this.log('🔍 Chat Site Strict Check:');
+    this.log('   Current Query:', queryText);
+    this.log('   Page Content Preview:', pageText.substring(0, 200) + '...');
     
-    // Check if current query matches topics
-    const queryMatches = topics.some(t => queryText.toLowerCase().includes(t));
-    console.log('   Query Topic Match:', queryMatches ? '✅ FOUND' : '❌ NOT FOUND');
+    // Check if current query matches any metadata rules
+    let queryMatches = false;
+    if (topics.length > 0) {
+      queryMatches = topics.some(t => queryText.toLowerCase().includes(t));
+    }
+    if (titleIncludes.length > 0) {
+      queryMatches = queryMatches || titleIncludes.some(t => queryText.toLowerCase().includes(t));
+    }
+    if (descriptionIncludes.length > 0) {
+      queryMatches = queryMatches || descriptionIncludes.some(t => queryText.toLowerCase().includes(t));
+    }
+    if (keywordsIncludes.length > 0) {
+      queryMatches = queryMatches || keywordsIncludes.some(t => queryText.toLowerCase().includes(t));
+    }
     
-    // Check if page content matches topics
-    const contentMatches = topics.some(t => pageText.includes(t));
-    console.log('   Content Topic Match:', contentMatches ? '✅ FOUND' : '❌ NOT FOUND');
+    this.log('   Query Metadata Match:', queryMatches ? '✅ FOUND' : '❌ NOT FOUND');
+    
+    // Check if page content matches any metadata rules
+    let contentMatches = false;
+    if (topics.length > 0) {
+      contentMatches = topics.some(t => pageText.includes(t));
+    }
+    if (titleIncludes.length > 0) {
+      contentMatches = contentMatches || titleIncludes.some(t => pageText.includes(t));
+    }
+    if (descriptionIncludes.length > 0) {
+      contentMatches = contentMatches || descriptionIncludes.some(t => pageText.includes(t));
+    }
+    if (keywordsIncludes.length > 0) {
+      contentMatches = contentMatches || keywordsIncludes.some(t => pageText.includes(t));
+    }
+    
+    this.log('   Content Metadata Match:', contentMatches ? '✅ FOUND' : '❌ NOT FOUND');
     
     // For chat sites, be more lenient - allow if EITHER query OR content matches
     // This prevents blocking when you're just starting to type
     const allowed = queryMatches || contentMatches;
-    console.log('🎯 Chat Site Result:', allowed ? '✅ ALLOWED' : '❌ BLOCKED');
+    this.log('🎯 Chat Site Result:', allowed ? '✅ ALLOWED' : '❌ BLOCKED');
     
     if (!allowed) {
-      console.log('🚫 BLOCKING: Chat site does not meet topic requirements');
+      this.log('🚫 BLOCKING: Chat site does not meet metadata requirements');
       this.blockPage('Focus Session: chat site content/query not allowed');
     } else {
-      console.log('✅ ALLOWING: Chat site meets topic requirements');
+      this.log('✅ ALLOWING: Chat site meets metadata requirements');
     }
   }
 
-  // Enhanced topic filter: check any website content against allowed topics
+  // Enhanced topic filter: check any website content against allowed metadata
   async enforceTopicFilterIfNeeded() {
     const { focusMode, allowedMetadata, currentSession } = await chrome.storage.sync.get(['focusMode', 'allowedMetadata', 'currentSession']);
     
     // If there's an active session, use its metadata instead of the general settings
     const activeMetadata = currentSession?.allowedMetadata || allowedMetadata;
-    const topics = (activeMetadata?.topics || []).map(t=>String(t).toLowerCase());
     
-    if (!focusMode || topics.length === 0) {
-      console.log('⏭️ No topic filtering needed - Focus mode off or no topics');
+    // Check both old 'topics' format and new metadata format
+    const topics = (activeMetadata?.topics || []).map(t=>String(t).toLowerCase());
+    const titleIncludes = (activeMetadata?.titleIncludes || []).map(t=>String(t).toLowerCase());
+    const descriptionIncludes = (activeMetadata?.descriptionIncludes || []).map(t=>String(t).toLowerCase());
+    const keywordsIncludes = (activeMetadata?.keywordsIncludes || []).map(t=>String(t).toLowerCase());
+    
+    if (!focusMode || (topics.length === 0 && titleIncludes.length === 0 && descriptionIncludes.length === 0 && keywordsIncludes.length === 0)) {
+      this.log('⏭️ No topic filtering needed - Focus mode off or no metadata rules');
       return; // No filtering needed
     }
     
-    console.log('🔒 General Topic Filter Check (Any Website)');
-    console.log('🎯 Focus Mode Active:', focusMode);
-    console.log('📋 Active Session:', currentSession?.name || 'None');
-    console.log('📋 Allowed Topics:', topics);
+    this.log('🔒 General Metadata Filter Check (Any Website)');
+    this.log('🎯 Focus Mode Active:', focusMode);
+    this.log('📋 Active Session:', currentSession?.name || 'None');
+    this.log('📋 Allowed Topics:', topics);
+    this.log('📋 Allowed Title Keywords:', titleIncludes);
+    this.log('📋 Allowed Description Keywords:', descriptionIncludes);
+    this.log('📋 Allowed Keywords:', keywordsIncludes);
     
     const data = this.extractContentData();
-    const text = `${data.title} ${data.description} ${data.textContent} ${data.chatQuery||''}`.toLowerCase();
+    const title = data.title.toLowerCase();
+    const description = data.description.toLowerCase();
+    const keywords = data.keywords.toLowerCase();
+    const textContent = data.textContent.toLowerCase();
     
-    console.log('🔍 Checking page content against topics:');
-    console.log('   Title:', data.title);
-    console.log('   Description:', data.description);
-    console.log('   Text preview:', text.substring(0, 200) + '...');
+    this.log('🔍 Checking page content against metadata rules:');
+    this.log('   Title:', data.title);
+    this.log('   Description:', data.description);
+    this.log('   Keywords:', data.keywords);
+    this.log('   Text preview:', textContent.substring(0, 200) + '...');
     
-    const matches = topics.some(t => {
-      const found = text.includes(t);
-      console.log(`   Topic "${t}": ${found ? '✅ FOUND' : '❌ NOT FOUND'}`);
-      return found;
-    });
+    // Check topics (if any)
+    let topicMatches = false;
+    if (topics.length > 0) {
+      topicMatches = topics.some(t => {
+        const found = textContent.includes(t);
+        this.log(`   Topic "${t}": ${found ? '✅ FOUND' : '❌ NOT FOUND'}`);
+        return found;
+      });
+    }
     
-    console.log('🎯 General Topic Match Result:', matches ? '✅ ALLOWED' : '❌ BLOCKED');
+    // Check title includes (if any)
+    let titleMatches = false;
+    if (titleIncludes.length > 0) {
+      titleMatches = titleIncludes.some(t => {
+        const found = title.includes(t);
+        this.log(`   Title keyword "${t}": ${found ? '✅ FOUND' : '❌ NOT FOUND'}`);
+        return found;
+      });
+    }
     
-    if (!matches) {
-      console.log('🚫 BLOCKING: Page content does not match allowed topics');
-      this.blockPage('Focus Session: content does not match allowed topics');
+    // Check description includes (if any)
+    let descriptionMatches = false;
+    if (descriptionIncludes.length > 0) {
+      descriptionMatches = descriptionIncludes.some(t => {
+        const found = description.includes(t);
+        this.log(`   Description keyword "${t}": ${found ? '✅ FOUND' : '❌ NOT FOUND'}`);
+        return found;
+      });
+    }
+    
+    // Check keywords includes (if any)
+    let keywordsMatches = false;
+    if (keywordsIncludes.length > 0) {
+      keywordsMatches = keywordsIncludes.some(t => {
+        const found = keywords.includes(t);
+        this.log(`   Meta keywords "${t}": ${found ? '✅ FOUND' : '❌ NOT FOUND'}`);
+        return found;
+      });
+    }
+    
+    // Allow if ANY of the metadata rules match
+    const allowed = topicMatches || titleMatches || descriptionMatches || keywordsMatches;
+    
+    this.log('🎯 Metadata Match Results:');
+    this.log('   Topics:', topicMatches ? '✅ MATCH' : '❌ NO MATCH');
+    this.log('   Title Keywords:', titleMatches ? '✅ MATCH' : '❌ NO MATCH');
+    this.log('   Description Keywords:', descriptionMatches ? '✅ MATCH' : '❌ NO MATCH');
+    this.log('   Meta Keywords:', keywordsMatches ? '✅ MATCH' : '❌ NO MATCH');
+    this.log('🎯 Final Result:', allowed ? '✅ ALLOWED' : '❌ BLOCKED');
+    
+    if (!allowed) {
+      this.log('🚫 BLOCKING: Page content does not match any allowed metadata rules');
+      this.blockPage('Focus Session: content does not match allowed metadata');
     } else {
-      console.log('✅ ALLOWING: Page content matches focus session topics');
+      this.log('✅ ALLOWING: Page content matches focus session metadata rules');
     }
   }
 
