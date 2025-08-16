@@ -86,23 +86,34 @@ class ContentAnalyzer {
 
       // Wait a bit for content to load
       setTimeout(async () => {
-        const contentData = this.extractContentData();
+        const contentData = await this.extractContentData();
         
         // If focus mode is ON, enforce allow-by-metadata first
         if (this.focusMode) {
           this.log('🎯 Focus Mode Active - Checking metadata rules...');
           this.log('📋 Current metadata rules:', this.allowedMetadata);
           
-          const metadataMatch = this.matchesAllowedMetadata(contentData);
-          this.log('🎯 Metadata check result:', metadataMatch ? '✅ MATCH' : '❌ NO MATCH');
+          // For chat sites, allow initially and check query later
+          const isChat = this.isChatSite();
+          this.log('🔍 Chat site check result:', isChat);
           
-          if (!metadataMatch) {
-            const reason = 'Focus Session: site does not match allowed metadata';
-            this.log('🚫 BLOCKING: Focus mode active but metadata does not match', { contentData, reason });
-            this.blockPage(reason);
-            return;
+          if (isChat) {
+            this.log('🤖 Chat site detected - allowing initial access, will check query when typed');
+            // Don't block chat sites initially - let the chat query filter handle it
           } else {
-            this.log('✅ ALLOWING: Page matches focus mode metadata rules');
+            // For non-chat sites, check metadata immediately
+            this.log('🌐 Non-chat site detected - checking metadata immediately');
+            const metadataMatch = this.matchesAllowedMetadata(contentData);
+            this.log('🎯 Metadata check result:', metadataMatch ? '✅ MATCH' : '❌ NO MATCH');
+            
+            if (!metadataMatch) {
+              const reason = 'Focus Session: site does not match allowed metadata';
+              this.log('🚫 BLOCKING: Focus mode active but metadata does not match', { contentData, reason });
+              this.blockPage(reason);
+              return;
+            } else {
+              this.log('✅ ALLOWING: Page matches focus mode metadata rules');
+            }
           }
         } else {
           this.log('⏭️ Focus mode not active - skipping metadata check');
@@ -113,9 +124,15 @@ class ContentAnalyzer {
         // 1. Chat site topic filter (stricter - only allows specific query topics)
         // Wait longer for chat sites to load content
         if (this.isChatSite()) {
-          this.log('🤖 Chat site detected - waiting for full page load...');
-          // Wait much longer for chat sites to be fully interactive
-          setTimeout(() => this.enforceChatTopicFilterIfNeeded(), 80000); // Wait 80 seconds
+          this.log('🤖 Chat site detected - waiting for interface to load...');
+          // Wait for chat interface to be ready, then check
+          setTimeout(async () => {
+            try {
+              await this.enforceChatTopicFilterIfNeeded();
+            } catch (error) {
+              this.log('⚠️ Error in chat topic filter:', error);
+            }
+          }, 5000); // Wait 5 seconds for interface to load
           // Also set up continuous monitoring for chat sites
           this.setupChatSiteMonitoring();
         } else {
@@ -195,7 +212,7 @@ class ContentAnalyzer {
     return anyMatch;
   }
 
-  extractContentData() {
+  async extractContentData() {
     const data = {
       url: window.location.href,
       title: document.title || '',
@@ -245,38 +262,19 @@ class ContentAnalyzer {
 
     // Chat site guards: capture the current query/topic heuristically
     const host = location.hostname;
-    if (/chat\.openai\.com$/.test(host)) {
-      const q = document.querySelector('[data-testid="composer"] textarea, textarea')?.value || '';
-      data.chatQuery = q;
-      this.log('🤖 ChatGPT Query:', q || 'No active query');
-    } else if (/perplexity\.ai$/.test(host)) {
-      const q = document.querySelector('textarea, input[name="q"]')?.value || '';
-      data.chatQuery = q;
-      this.log('🔍 Perplexity Query:', q || 'No active query');
-    } else if (/claude\.ai$/.test(host)) {
-      const q = document.querySelector('textarea')?.value || '';
-      data.chatQuery = q;
-      this.log('🧠 Claude Query:', q || 'No active query');
-    } else if (/bard\.google\.com$/.test(host) || /gemini\.google\.com$/.test(host)) {
-      const q = document.querySelector('textarea, input[type="text"]')?.value || '';
-      data.chatQuery = q;
-      this.log('🌐 Google AI Query:', q || 'No active query');
+    if (this.isChatSite()) {
+      // Use enhanced chat query extraction for chat sites
+      data.chatQuery = await this.extractChatQuery();
     }
 
-    // Look for streaming/entertainment indicators
+    // Look for streaming/entertainment indicators (simplified)
     data.hasVideoElements = document.querySelectorAll('video').length > 0;
-    data.hasStreamingKeywords = this.hasStreamingKeywords(data.title + ' ' + data.description + ' ' + data.textContent);
     
     this.log('🎥 Video Elements:', data.hasVideoElements);
-    this.log('🎬 Streaming Keywords Detected:', data.hasStreamingKeywords);
 
-    // Check for social media patterns
+    // Check for social media patterns (simplified)
     data.isSocialMedia = this.isSocialMediaSite();
     this.log('📱 Social Media Detected:', data.isSocialMedia);
-
-    // Check for entertainment/movie patterns
-    data.isEntertainment = this.isEntertainmentSite();
-    this.log('🎭 Entertainment Detected:', data.isEntertainment);
 
     this.log('📊 Final Extracted Data:', data);
     this.log('🔍 AI Productivity Guardian - Content Analysis Complete');
@@ -362,13 +360,21 @@ class ContentAnalyzer {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['value', 'textContent']
+      attributeFilter: ['value', 'textContent', 'contenteditable']
     });
     
-    // Also check periodically for safety
-    setInterval(() => {
-      this.checkChatQueryChange();
-    }, 2000); // Check every 2 seconds
+    // Also check more frequently for chat sites to catch typing quickly
+    setInterval(async () => {
+      try {
+        const currentQuery = await this.extractChatQuery();
+        if (currentQuery && currentQuery.length > 3) { // Check even short queries
+          this.log('🔄 Frequent chat query check:', currentQuery.substring(0, 50) + '...');
+          await this.checkChatQueryChange();
+        }
+      } catch (error) {
+        // Ignore errors in periodic checks
+      }
+    }, 1500); // Check every 1.5 seconds for chat sites
   }
 
   // Check if chat query has changed and re-evaluate
@@ -377,11 +383,18 @@ class ContentAnalyzer {
       const { focusMode, currentSession } = await chrome.storage.sync.get(['focusMode', 'currentSession']);
       if (!focusMode || !currentSession) return;
     
-      const data = this.extractContentData();
+      const data = await this.extractContentData();
       const queryText = data.chatQuery || '';
       
-      if (queryText.length > 10) { // Only check if there's a substantial query
-        this.log('🔍 Chat query changed, re-evaluating:', queryText.substring(0, 50) + '...');
+      this.log('🔍 Chat query change detected:', { 
+        queryLength: queryText.length, 
+        queryPreview: queryText.substring(0, 100),
+        focusMode,
+        hasSession: !!currentSession
+      });
+      
+      if (queryText.length > 3) { // Check even short queries
+        this.log('🔍 Evaluating chat query against focus rules:', queryText.substring(0, 50) + '...');
         
         const activeMetadata = currentSession?.allowedMetadata || {};
         
@@ -390,6 +403,8 @@ class ContentAnalyzer {
         const titleIncludes = (activeMetadata?.titleIncludes || []).map(t => String(t).toLowerCase());
         const descriptionIncludes = (activeMetadata?.descriptionIncludes || []).map(t => String(t).toLowerCase());
         const keywordsIncludes = (activeMetadata?.keywordsIncludes || []).map(t => String(t).toLowerCase());
+        
+        this.log('📋 Checking query against metadata rules:', { topics, titleIncludes, descriptionIncludes, keywordsIncludes });
         
         let queryMatches = false;
         if (topics.length > 0) {
@@ -405,12 +420,16 @@ class ContentAnalyzer {
           queryMatches = queryMatches || keywordsIncludes.some(t => queryText.toLowerCase().includes(t));
         }
         
+        this.log('🎯 Query metadata match result:', queryMatches ? '✅ MATCH' : '❌ NO MATCH');
+        
         if (!queryMatches) {
           this.log('🚫 Chat query does not match allowed metadata, blocking...');
           this.blockPage('Focus Session: chat query not allowed');
         } else {
-          this.log('✅ Chat query matches allowed metadata');
+          this.log('✅ Chat query matches allowed metadata - allowing');
         }
+      } else {
+        this.log('⏭️ Query too short, waiting for more input...');
       }
     } catch (error) {
       console.error('Error checking chat query change:', error);
@@ -450,16 +469,7 @@ class ContentAnalyzer {
     }
   }
 
-  hasStreamingKeywords(text) {
-    const streamingKeywords = [
-      'watch', 'stream', 'movie', 'film', 'tv show', 'series', 'episode',
-      'cinema', 'trailer', 'video', 'play now', 'watch online', 'free movies',
-      'download', 'torrent', 'seasons', 'netflix', 'hulu', 'prime video'
-    ];
-    
-    const lowerText = text.toLowerCase();
-    return streamingKeywords.some(keyword => lowerText.includes(keyword));
-  }
+
 
   isSocialMediaSite() {
     const socialKeywords = [
@@ -475,25 +485,138 @@ class ContentAnalyzer {
     );
   }
 
-  isEntertainmentSite() {
-    const entertainmentKeywords = [
-      'sflix', 'movie', 'cinema', 'film', 'entertainment', 'gaming',
-      'game', 'meme', 'funny', 'viral', 'celebrity', 'gossip'
-    ];
-    
-    const hostname = window.location.hostname.toLowerCase();
-    const title = document.title.toLowerCase();
-    const description = (document.querySelector('meta[name="description"]')?.getAttribute('content') || '').toLowerCase();
-    
-    return entertainmentKeywords.some(keyword => 
-      hostname.includes(keyword) || title.includes(keyword) || description.includes(keyword)
-    );
-  }
+
 
   // Check if current site is a chat site
   isChatSite() {
     const host = location.hostname;
-    return /chat\.openai\.com$/.test(host) || /perplexity\.ai$/.test(host) || /claude\.ai$/.test(host) || /bard\.google\.com$/.test(host) || /gemini\.google\.com$/.test(host);
+    this.log('🔍 Checking if site is chat site:', { host, location: location.href });
+    
+    // Check for various chat site patterns
+    const isChat = /chat\.openai\.com$/.test(host) || 
+                   /chatgpt\.com$/.test(host) || 
+                   /perplexity\.ai$/.test(host) || 
+                   /claude\.ai$/.test(host) || 
+                   /bard\.google\.com$/.test(host) || 
+                   /gemini\.google\.com$/.test(host);
+    
+    this.log('🤖 Chat site detection result:', isChat);
+    return isChat;
+  }
+
+  // Enhanced chat query extraction that waits for interface to load
+  async extractChatQuery() {
+    const host = location.hostname;
+    let query = '';
+    
+    // Wait for chat interface to be fully loaded
+    await this.waitForChatInterface();
+    
+    if (/chat\.openai\.com$/.test(host) || /chatgpt\.com$/.test(host)) {
+      // ChatGPT - look for multiple possible selectors
+      const selectors = [
+        '[data-testid="composer"] textarea',
+        'textarea[placeholder*="Message"]',
+        'textarea[placeholder*="Send a message"]',
+        'textarea',
+        'input[type="text"]'
+      ];
+      
+      for (const selector of selectors) {
+        const element = document.querySelector(selector);
+        if (element && element.value) {
+          query = element.value;
+          break;
+        }
+      }
+    } else if (/perplexity\.ai$/.test(host)) {
+      // Perplexity - look for the main input field
+      const selectors = [
+        'textarea[placeholder*="Ask anything"]',
+        'textarea[placeholder*="Ask"]',
+        'textarea',
+        'input[type="text"]',
+        '[contenteditable="true"]'
+      ];
+      
+      for (const selector of selectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+          if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') {
+            query = element.value || '';
+          } else if (element.contentEditable === 'true') {
+            query = element.textContent || '';
+          }
+          if (query) break;
+        }
+      }
+    } else if (/claude\.ai$/.test(host)) {
+      // Claude
+      const selectors = [
+        'textarea[placeholder*="Message"]',
+        'textarea',
+        'input[type="text"]'
+      ];
+      
+      for (const selector of selectors) {
+        const element = document.querySelector(selector);
+        if (element && element.value) {
+          query = element.value;
+          break;
+        }
+      }
+    } else if (/bard\.google\.com$/.test(host) || /gemini\.google\.com$/.test(host)) {
+      // Google AI
+      const selectors = [
+        'textarea[placeholder*="Message"]',
+        'textarea',
+        'input[type="text"]'
+      ];
+      
+      for (const selector of selectors) {
+        const element = document.querySelector(selector);
+        if (element && element.value) {
+          query = element.value;
+          break;
+        }
+      }
+    }
+    
+    this.log('🤖 Chat Query Extracted:', { host, query, length: query.length });
+    return query;
+  }
+
+  // Wait for chat interface to be ready
+  async waitForChatInterface() {
+    const host = location.hostname;
+    let maxWait = 10000; // 10 seconds max
+    let waited = 0;
+    const interval = 500; // Check every 500ms
+    
+    while (waited < maxWait) {
+      // Check if chat interface elements exist
+      let interfaceReady = false;
+      
+      if (/perplexity\.ai$/.test(host)) {
+        interfaceReady = !!document.querySelector('textarea, input[type="text"], [contenteditable="true"]');
+      } else if (/chat\.openai\.com$/.test(host) || /chatgpt\.com$/.test(host)) {
+        interfaceReady = !!document.querySelector('textarea, input[type="text"]');
+      } else if (/claude\.ai$/.test(host)) {
+        interfaceReady = !!document.querySelector('textarea, input[type="text"]');
+      } else if (/bard\.google\.com$/.test(host) || /gemini\.google\.com$/.test(host)) {
+        interfaceReady = !!document.querySelector('textarea, input[type="text"]');
+      }
+      
+      if (interfaceReady) {
+        this.log('✅ Chat interface ready after', waited, 'ms');
+        return;
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, interval));
+      waited += interval;
+    }
+    
+    this.log('⚠️ Chat interface not ready after', maxWait, 'ms - proceeding anyway');
   }
 
   // Chat site topic filter: stricter filtering for chat AI sites
@@ -526,7 +649,7 @@ class ContentAnalyzer {
       return;
     }
     
-    const data = this.extractContentData();
+    const data = await this.extractContentData();
     
     // For chat sites, be more strict - check current query AND page content
     const queryText = data.chatQuery || '';
@@ -553,33 +676,19 @@ class ContentAnalyzer {
     
     this.log('   Query Metadata Match:', queryMatches ? '✅ FOUND' : '❌ NOT FOUND');
     
-    // Check if page content matches any metadata rules
-    let contentMatches = false;
-    if (topics.length > 0) {
-      contentMatches = topics.some(t => pageText.includes(t));
-    }
-    if (titleIncludes.length > 0) {
-      contentMatches = contentMatches || titleIncludes.some(t => pageText.includes(t));
-    }
-    if (descriptionIncludes.length > 0) {
-      contentMatches = contentMatches || descriptionIncludes.some(t => pageText.includes(t));
-    }
-    if (keywordsIncludes.length > 0) {
-      contentMatches = contentMatches || keywordsIncludes.some(t => pageText.includes(t));
+    // For chat sites, ONLY check the query, not page content
+    // Page content should always be allowed initially
+    if (queryText.length === 0) {
+      this.log('⏭️ No query typed yet - allowing chat site access');
+      return;
     }
     
-    this.log('   Content Metadata Match:', contentMatches ? '✅ FOUND' : '❌ NOT FOUND');
-    
-    // For chat sites, be more lenient - allow if EITHER query OR content matches
-    // This prevents blocking when you're just starting to type
-    const allowed = queryMatches || contentMatches;
-    this.log('🎯 Chat Site Result:', allowed ? '✅ ALLOWED' : '❌ BLOCKED');
-    
-    if (!allowed) {
-      this.log('🚫 BLOCKING: Chat site does not meet metadata requirements');
-      this.blockPage('Focus Session: chat site content/query not allowed');
+    // Only block if there's a query and it doesn't match
+    if (!queryMatches) {
+      this.log('🚫 BLOCKING: Chat query does not meet metadata requirements');
+      this.blockPage('Focus Session: chat query not allowed');
     } else {
-      this.log('✅ ALLOWING: Chat site meets metadata requirements');
+      this.log('✅ ALLOWING: Chat query meets metadata requirements');
     }
   }
 
@@ -601,6 +710,12 @@ class ContentAnalyzer {
       return; // No filtering needed
     }
     
+    // Skip this check for chat sites - they're handled by chat query filter
+    if (this.isChatSite()) {
+      this.log('🤖 Chat site detected - skipping general metadata check (will check queries instead)');
+      return;
+    }
+    
     this.log('🔒 General Metadata Filter Check (Any Website)');
     this.log('🎯 Focus Mode Active:', focusMode);
     this.log('📋 Active Session:', currentSession?.name || 'None');
@@ -609,7 +724,7 @@ class ContentAnalyzer {
     this.log('📋 Allowed Description Keywords:', descriptionIncludes);
     this.log('📋 Allowed Keywords:', keywordsIncludes);
     
-    const data = this.extractContentData();
+    const data = await this.extractContentData();
     const title = data.title.toLowerCase();
     const description = data.description.toLowerCase();
     const keywords = data.keywords.toLowerCase();
