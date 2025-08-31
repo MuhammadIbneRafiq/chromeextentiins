@@ -4,7 +4,17 @@ class ProductivityGuardian {
     this.groqApiKey = null;
     this.groqApiUrl = 'https://api.groq.com/openai/v1/chat/completions';
     this.isEnabled = true;
-    this.blockedSites = ['sflix.to', 'netflix.com', 'youtube.com', 'facebook.com', 'instagram.com', 'tiktok.com'];
+    this.blockedSites = [
+      'sflix.to', 'netflix.com', 'youtube.com', 'facebook.com', 'instagram.com', 'tiktok.com',
+      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies', 'watchseries',
+      'fullmoviess.net', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
+      'streamingmovies', 'moviehub', 'filmhub', 'cinemahub', 'movie4k', 'moviehd',
+      'hulu.com', 'disneyplus.com', 'hbomax.com', 'peacock.com', 'paramountplus.com',
+      'appletv.com', 'crunchyroll.com', 'funimation.com', 'vudu.com',
+      // Adult/vulgar sites
+      'pornhub.com', 'xhamster.com', 'xvideos.com', 'redtube.com', 'youporn.com', 'tube8.com',
+      'adultfriendfinder.com', 'ashleymadison.com', 'adultdating.com', 'hookup.com'
+    ];
     this.allowedSites = ['stackoverflow.com', 'github.com', 'developer.mozilla.org', 'coursera.org', 'khan-academy.org', 'tue.video.yuja.com'];
     this.focusMode = false;
     this.allowedMetadata = {
@@ -358,6 +368,20 @@ class ProductivityGuardian {
 
   async analyzeUrlWithAI(url, hostname) {
     try {
+      // NEW: Aggressive movie content detection before AI analysis
+      const movieBlockResult = this.checkUrlForMovieContent(url, hostname);
+      if (movieBlockResult.shouldBlock) {
+        this.log('🚫 MOVIE CONTENT DETECTED IN URL - BLOCKING IMMEDIATELY:', movieBlockResult);
+        return true; // Block the site
+      }
+
+      // NEW: Aggressive vulgar content detection before AI analysis
+      const vulgarBlockResult = this.checkUrlForVulgarContent(url, hostname);
+      if (vulgarBlockResult.shouldBlock) {
+        this.log('🚫 VULGAR CONTENT DETECTED IN URL - BLOCKING IMMEDIATELY:', vulgarBlockResult);
+        return true; // Block the site
+      }
+
       // Check if we should test API connection first
       if (!this.apiWorking && Date.now() - this.lastApiCheck > 60000) {
         await this.checkApiConnection();
@@ -412,6 +436,153 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
       this.apiWorking = false;
       return false;
     }
+  }
+
+  // NEW: Comprehensive movie content detection for URLs
+  checkUrlForMovieContent(url, hostname) {
+    const urlLower = (url || '').toLowerCase();
+    const hostnameLower = (hostname || '').toLowerCase();
+    
+    // Comprehensive list of movie-related keywords and patterns
+    const movieKeywords = [
+      // Movie streaming sites (exact matches)
+      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies', 'watchseries',
+      
+      // Movie/film terms (exact matches)
+      'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
+      
+      // Streaming platforms (exact matches)
+      'netflix', 'hulu', 'disney+', 'disneyplus', 'amazon prime', 'prime video',
+      'hbo max', 'hbomax', 'peacock', 'paramount+', 'paramountplus',
+      'apple tv', 'appletv', 'crunchyroll', 'funimation', 'vudu',
+      
+      // Movie-related phrases (exact matches)
+      'watch online', 'stream online', 'free movies', 'hd movies', 'full movie',
+      'movie streaming', 'film streaming', 'watch free', 'free streaming',
+      'movie download', 'film download', 'torrent', 'streaming site',
+      
+      // Entertainment terms (exact matches)
+      'entertainment', 'tv shows', 'television', 'series', 'episode',
+      'season', 'watch', 'stream', 'streaming', 'video', 'videos',
+      
+      // Common movie site patterns (exact matches)
+      'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
+      'streamingmovies', 'moviehub', 'filmhub', 'cinemahub',
+      
+      // File extensions and formats (exact matches)
+      '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm',
+      
+      // Common movie site domains (exact matches)
+      'movie4k', 'moviehd', 'moviehub', 'filmhub', 'cinemahub'
+    ];
+    
+    // Check URL for movie patterns
+    const urlHasMovieContent = movieKeywords.some(keyword => urlLower.includes(keyword));
+    if (urlHasMovieContent) {
+      const matchedKeyword = movieKeywords.find(k => urlLower.includes(k));
+      this.log('🚫 MOVIE DETECTED IN URL:', { 
+        url, 
+        hostname, 
+        matchedKeyword,
+        context: urlLower.substring(Math.max(0, urlLower.indexOf(matchedKeyword) - 20), urlLower.indexOf(matchedKeyword) + matchedKeyword.length + 20)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Movie streaming site detected in URL: "${matchedKeyword}"`,
+        matchedPattern: 'URL contains movie-related keywords'
+      };
+    }
+    
+    // Check hostname for movie patterns
+    const hostnameHasMovieContent = movieKeywords.some(keyword => hostnameLower.includes(keyword));
+    if (hostnameHasMovieContent) {
+      const matchedKeyword = movieKeywords.find(k => hostnameLower.includes(k));
+      this.log('🚫 MOVIE DETECTED IN HOSTNAME:', { 
+        url, 
+        hostname, 
+        matchedKeyword,
+        context: hostnameLower.substring(Math.max(0, hostnameLower.indexOf(matchedKeyword) - 10), hostnameLower.indexOf(matchedKeyword) + matchedKeyword.length + 10)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Movie streaming site detected in hostname: "${matchedKeyword}"`,
+        matchedPattern: 'Hostname contains movie-related keywords'
+      };
+    }
+    
+    this.log('✅ No movie content detected in URL - allowing for further analysis');
+    return {
+      shouldBlock: false,
+      reason: 'No movie content detected in URL'
+    };
+  }
+
+  // NEW: Comprehensive vulgar content detection for URLs
+  checkUrlForVulgarContent(url, hostname) {
+    const urlLower = (url || '').toLowerCase();
+    const hostnameLower = (hostname || '').toLowerCase();
+    
+    // Comprehensive list of vulgar/inappropriate keywords and patterns
+    const vulgarKeywords = [
+      // Explicit vulgar terms (exact matches)
+      'fuck', 'shit', 'pussy', 'dick', 'cunt', 'asshole', 'bitch', 'slut',
+      'nigga', 'nigger', 'whore', 'hoe', 'cock', 'penis', 'vagina', 'ass',
+      
+      // Adult content terms (exact matches)
+      'porn', 'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn',
+      'adult', 'sex', 'sexual', 'nude', 'naked', 'nudity', 'erotic',
+      
+      // Inappropriate content patterns (exact matches)
+      'xxx', 'x-rated', 'adult content', 'mature content', 'explicit',
+      'nsfw', 'not safe for work', 'adult entertainment', 'adult site',
+      
+      // Common vulgar site patterns (exact matches)
+      'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn', 'tube8',
+      'adultfriendfinder', 'ashleymadison', 'adult dating', 'hookup',
+      
+      // File extensions for adult content (exact matches)
+      '.xxx', '.adult', '.porn', '.sex'
+    ];
+    
+    // Check URL for vulgar patterns
+    const urlHasVulgarContent = vulgarKeywords.some(keyword => urlLower.includes(keyword));
+    if (urlHasVulgarContent) {
+      const matchedKeyword = vulgarKeywords.find(k => urlLower.includes(k));
+      this.log('🚫 VULGAR DETECTED IN URL:', { 
+        url, 
+        hostname, 
+        matchedKeyword,
+        context: urlLower.substring(Math.max(0, urlLower.indexOf(matchedKeyword) - 20), urlLower.indexOf(matchedKeyword) + matchedKeyword.length + 20)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Vulgar content detected in URL: "${matchedKeyword}"`,
+        matchedPattern: 'URL contains vulgar keywords'
+      };
+    }
+    
+    // Check hostname for vulgar patterns
+    const hostnameHasVulgarContent = vulgarKeywords.some(keyword => hostnameLower.includes(keyword));
+    if (hostnameHasVulgarContent) {
+      const matchedKeyword = vulgarKeywords.find(k => hostnameLower.includes(k));
+      this.log('🚫 VULGAR DETECTED IN HOSTNAME:', { 
+        url, 
+        hostname, 
+        matchedKeyword,
+        context: hostnameLower.substring(Math.max(0, hostnameLower.indexOf(matchedKeyword) - 10), hostnameLower.indexOf(matchedKeyword) + matchedKeyword.length + 10)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Vulgar content detected in hostname: "${matchedKeyword}"`,
+        matchedPattern: 'Hostname contains vulgar keywords'
+      };
+    }
+    
+    this.log('✅ No vulgar content detected in URL - allowing for further analysis');
+    return {
+      shouldBlock: false,
+      reason: 'No vulgar content detected in URL'
+    };
   }
 
   async analyzeContentWithAI(contentData) {

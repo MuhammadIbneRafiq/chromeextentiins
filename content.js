@@ -94,6 +94,20 @@ class ContentAnalyzer {
       setTimeout(async () => {
         const contentData = await this.extractContentData();
         
+        // NEW: AGGRESSIVE MOVIE BLOCKING - Check for movie-related content first
+        const movieBlockResult = this.checkForMovieContent(contentData);
+        if (movieBlockResult.shouldBlock) {
+          this.log('🚫 MOVIE CONTENT DETECTED - BLOCKING IMMEDIATELY:', movieBlockResult);
+          this.blockPage(movieBlockResult.reason);
+          return;
+        }
+        const vulgarBlockResult = this.checkForVulgarContent(contentData);
+        if (vulgarBlockResult.shouldBlock) {
+          this.log('🚫 VULGAR CONTENT DETECTED - BLOCKING IMMEDIATELY:', vulgarBlockResult);
+          this.blockPage(vulgarBlockResult.reason);
+          return;
+        }
+        
         // If focus mode is ON, enforce allow-by-metadata first
         if (this.focusMode) {
           this.log('🎯 Focus Mode Active - Checking metadata rules...');
@@ -798,6 +812,315 @@ class ContentAnalyzer {
     } else {
       this.log('✅ ALLOWING: Page content matches focus session metadata rules');
     }
+  }
+
+  // NEW: Comprehensive movie content detection and blocking
+  checkForMovieContent(contentData) {
+    const url = (contentData.url || '').toLowerCase();
+    const title = (contentData.title || '').toLowerCase();
+    const description = (contentData.description || '').toLowerCase();
+    const keywords = (contentData.keywords || '').toLowerCase();
+    const textContent = (contentData.textContent || '').toLowerCase();
+    
+    // Comprehensive list of movie-related keywords and patterns
+    const movieKeywords = [
+      // Movie streaming sites (exact matches)
+      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies', 'watchseries',
+      
+      // Movie/film terms (exact matches)
+      'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
+      
+      // Streaming platforms (exact matches)
+      'netflix', 'hulu', 'disney+', 'disneyplus', 'amazon prime', 'prime video',
+      'hbo max', 'hbomax', 'peacock', 'paramount+', 'paramountplus',
+      'apple tv', 'appletv', 'crunchyroll', 'funimation', 'vudu',
+      
+      // Movie-related phrases (exact matches)
+      'watch online', 'stream online', 'free movies', 'hd movies', 'full movie',
+      'movie streaming', 'film streaming', 'watch free', 'free streaming',
+      'movie download', 'film download', 'torrent', 'streaming site',
+      
+      // Entertainment terms (exact matches)
+      'entertainment', 'tv shows', 'television', 'series', 'episode',
+      'season', 'watch', 'stream', 'streaming', 'video', 'videos',
+      
+      // Common movie site patterns (exact matches)
+      'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
+      'streamingmovies', 'moviehub', 'filmhub', 'cinemahub',
+      
+      // File extensions and formats (exact matches)
+      '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm',
+      
+      // Common movie site domains (exact matches)
+      'movie4k', 'moviehd', 'moviehub', 'filmhub', 'cinemahub'
+    ];
+    
+    // Helper function to check for word boundaries to prevent false positives
+    const hasWordBoundary = (text, keyword) => {
+      const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      return regex.test(text);
+    };
+    
+    // Check URL for movie patterns
+    const urlHasMovieContent = movieKeywords.some(keyword => url.includes(keyword));
+    if (urlHasMovieContent) {
+      const matchedKeyword = movieKeywords.find(k => url.includes(k));
+      this.log('🚫 MOVIE DETECTED IN URL:', { 
+        url, 
+        matchedKeyword,
+        context: url.substring(Math.max(0, url.indexOf(matchedKeyword) - 20), url.indexOf(matchedKeyword) + matchedKeyword.length + 20)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Movie streaming site detected in URL: "${matchedKeyword}"`,
+        matchedPattern: 'URL contains movie-related keywords'
+      };
+    }
+    
+    // Check title for movie patterns
+    const titleHasMovieContent = movieKeywords.some(keyword => title.includes(keyword));
+    if (titleHasMovieContent) {
+      const matchedKeyword = movieKeywords.find(k => title.includes(k));
+      this.log('🚫 MOVIE DETECTED IN TITLE:', { 
+        title, 
+        matchedKeyword,
+        context: title.substring(Math.max(0, title.indexOf(matchedKeyword) - 20), title.indexOf(matchedKeyword) + matchedKeyword.length + 20)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Movie content detected in page title: "${matchedKeyword}"`,
+        matchedPattern: 'Title contains movie-related keywords'
+      };
+    }
+    
+    // Check description for movie patterns
+    const descriptionHasMovieContent = movieKeywords.some(keyword => description.includes(keyword));
+    if (descriptionHasMovieContent) {
+      const matchedKeyword = movieKeywords.find(k => description.includes(k));
+      this.log('🚫 MOVIE DETECTED IN DESCRIPTION:', { 
+        description, 
+        matchedKeyword,
+        context: description.substring(Math.max(0, description.indexOf(matchedKeyword) - 30), description.indexOf(matchedKeyword) + matchedKeyword.length + 30)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Movie content detected in page description: "${matchedKeyword}"`,
+        matchedPattern: 'Description contains movie-related keywords'
+      };
+    }
+    
+    // Check keywords for movie patterns
+    const keywordsHasMovieContent = movieKeywords.some(keyword => keywords.includes(keyword));
+    if (keywordsHasMovieContent) {
+      const matchedKeyword = movieKeywords.find(k => keywords.includes(k));
+      this.log('🚫 MOVIE DETECTED IN KEYWORDS:', { 
+        keywords, 
+        matchedKeyword,
+        context: keywords.substring(Math.max(0, keywords.indexOf(matchedKeyword) - 20), keywords.indexOf(matchedKeyword) + matchedKeyword.length + 20)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Movie content detected in page keywords: "${matchedKeyword}"`,
+        matchedPattern: 'Keywords contain movie-related terms'
+      };
+    }
+    
+    // Check text content for movie patterns (with word boundary checking for common terms)
+    const textContentHasMovieContent = movieKeywords.some(keyword => {
+      // For common words like "watch", "stream", "video", use word boundary checking
+      const commonWords = ['watch', 'stream', 'streaming', 'video', 'videos', 'movie', 'movies', 'film', 'films'];
+      if (commonWords.includes(keyword)) {
+        return hasWordBoundary(textContent, keyword);
+      }
+      // For specific terms like "123movies", "netflix", etc., use simple includes
+      return textContent.includes(keyword);
+    });
+    
+    if (textContentHasMovieContent) {
+      const matchedKeyword = movieKeywords.find(k => {
+        const commonWords = ['watch', 'stream', 'streaming', 'video', 'videos', 'movie', 'movies', 'film', 'films'];
+        if (commonWords.includes(k)) {
+          return hasWordBoundary(textContent, k);
+        }
+        return textContent.includes(k);
+      });
+      
+      this.log('🚫 MOVIE DETECTED IN TEXT CONTENT:', { 
+        textPreview: textContent.substring(0, 200), 
+        matchedKeyword,
+        context: textContent.substring(Math.max(0, textContent.indexOf(matchedKeyword) - 30), textContent.indexOf(matchedKeyword) + matchedKeyword.length + 30)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Movie content detected in page text: "${matchedKeyword}"`,
+        matchedPattern: 'Page content contains movie-related keywords'
+      };
+    }
+    
+    // Check for video elements that might indicate streaming
+    if (contentData.hasVideoElements && (urlHasMovieContent || titleHasMovieContent || descriptionHasMovieContent)) {
+      this.log('🚫 VIDEO ELEMENTS WITH MOVIE CONTEXT DETECTED');
+      return {
+        shouldBlock: true,
+        reason: 'Video streaming content detected',
+        matchedPattern: 'Video elements with movie-related context'
+      };
+    }
+    
+    this.log('✅ No movie content detected - allowing page');
+    return {
+      shouldBlock: false,
+      reason: 'No movie content detected'
+    };
+  }
+
+  // NEW: Comprehensive vulgar content detection and blocking
+  checkForVulgarContent(contentData) {
+    const url = (contentData.url || '').toLowerCase();
+    const title = (contentData.title || '').toLowerCase();
+    const description = (contentData.description || '').toLowerCase();
+    const keywords = (contentData.keywords || '').toLowerCase();
+    const textContent = (contentData.textContent || '').toLowerCase();
+    
+    // Comprehensive list of vulgar/inappropriate keywords and patterns
+    const vulgarKeywords = [
+      // Explicit vulgar terms (exact matches)
+      'fuck', 'shit', 'pussy', 'dick', 'cunt', 'asshole', 'bitch', 'slut',
+      'nigga', 'nigger', 'whore', 'hoe', 'cock', 'penis', 'vagina', 'ass',
+      
+      // Adult content terms (exact matches)
+      'porn', 'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn',
+      'adult', 'sex', 'sexual', 'nude', 'naked', 'nudity', 'erotic',
+      
+      // Inappropriate content patterns (exact matches)
+      'xxx', 'x-rated', 'adult content', 'mature content', 'explicit',
+      'nsfw', 'not safe for work', 'adult entertainment', 'adult site',
+      
+      // Common vulgar site patterns (exact matches)
+      'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn', 'tube8',
+      'adultfriendfinder', 'ashleymadison', 'adult dating', 'hookup',
+      
+      // File extensions for adult content (exact matches)
+      '.xxx', '.adult', '.porn', '.sex'
+    ];
+    
+    // Helper function to check for word boundaries to prevent false positives
+    const hasWordBoundary = (text, keyword) => {
+      const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      return regex.test(text);
+    };
+    
+    // Check URL for vulgar patterns
+    const urlHasVulgarContent = vulgarKeywords.some(keyword => url.includes(keyword));
+    if (urlHasVulgarContent) {
+      const matchedKeyword = vulgarKeywords.find(k => url.includes(k));
+      this.log('🚫 VULGAR DETECTED IN URL:', { 
+        url, 
+        matchedKeyword,
+        context: url.substring(Math.max(0, url.indexOf(matchedKeyword) - 20), url.indexOf(matchedKeyword) + matchedKeyword.length + 20)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Vulgar content detected in URL: "${matchedKeyword}"`,
+        matchedPattern: 'URL contains vulgar keywords'
+      };
+    }
+    
+    // Check title for vulgar patterns
+    const titleHasVulgarContent = vulgarKeywords.some(keyword => title.includes(keyword));
+    if (titleHasVulgarContent) {
+      const matchedKeyword = vulgarKeywords.find(k => title.includes(k));
+      this.log('🚫 VULGAR DETECTED IN TITLE:', { 
+        title, 
+        matchedKeyword,
+        context: title.substring(Math.max(0, title.indexOf(matchedKeyword) - 20), title.indexOf(matchedKeyword) + matchedKeyword.length + 20)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Vulgar content detected in page title: "${matchedKeyword}"`,
+        matchedPattern: 'Title contains vulgar keywords'
+      };
+    }
+    
+    // Check description for vulgar patterns
+    const descriptionHasVulgarContent = vulgarKeywords.some(keyword => description.includes(keyword));
+    if (descriptionHasVulgarContent) {
+      const matchedKeyword = vulgarKeywords.find(k => description.includes(k));
+      this.log('🚫 VULGAR DETECTED IN DESCRIPTION:', { 
+        description, 
+        matchedKeyword,
+        context: description.substring(Math.max(0, description.indexOf(matchedKeyword) - 30), description.indexOf(matchedKeyword) + matchedKeyword.length + 30)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Vulgar content detected in page description: "${matchedKeyword}"`,
+        matchedPattern: 'Description contains vulgar keywords'
+      };
+    }
+    
+    // Check keywords for vulgar patterns
+    const keywordsHasVulgarContent = vulgarKeywords.some(keyword => keywords.includes(keyword));
+    if (keywordsHasVulgarContent) {
+      const matchedKeyword = vulgarKeywords.find(k => keywords.includes(k));
+      this.log('🚫 VULGAR DETECTED IN KEYWORDS:', { 
+        keywords, 
+        matchedKeyword,
+        context: keywords.substring(Math.max(0, keywords.indexOf(matchedKeyword) - 20), keywords.indexOf(matchedKeyword) + matchedKeyword.length + 20)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Vulgar content detected in page keywords: "${matchedKeyword}"`,
+        matchedPattern: 'Keywords contain vulgar terms'
+      };
+    }
+    
+    // Check text content for vulgar patterns (with word boundary checking for common terms)
+    const textContentHasVulgarContent = vulgarKeywords.some(keyword => {
+      // For common words like "sex", "adult", "nude", use word boundary checking
+      const commonWords = ['sex', 'adult', 'nude', 'naked', 'erotic', 'mature', 'explicit'];
+      if (commonWords.includes(keyword)) {
+        return hasWordBoundary(textContent, keyword);
+      }
+      // For specific terms like "pornhub", "fuck", etc., use simple includes
+      return textContent.includes(keyword);
+    });
+    
+    if (textContentHasVulgarContent) {
+      const matchedKeyword = vulgarKeywords.find(k => {
+        const commonWords = ['sex', 'adult', 'nude', 'naked', 'erotic', 'mature', 'explicit'];
+        if (commonWords.includes(k)) {
+          return hasWordBoundary(textContent, k);
+        }
+        return textContent.includes(k);
+      });
+      
+      this.log('🚫 VULGAR DETECTED IN TEXT CONTENT:', { 
+        textPreview: textContent.substring(0, 200), 
+        matchedKeyword,
+        context: textContent.substring(Math.max(0, textContent.indexOf(matchedKeyword) - 30), textContent.indexOf(matchedKeyword) + matchedKeyword.length + 30)
+      });
+      return {
+        shouldBlock: true,
+        reason: `Vulgar content detected in page text: "${matchedKeyword}"`,
+        matchedPattern: 'Page content contains vulgar keywords'
+      };
+    }
+    
+    // Check for video elements that might indicate adult content
+    if (contentData.hasVideoElements && (urlHasVulgarContent || titleHasVulgarContent || descriptionHasVulgarContent)) {
+      this.log('🚫 VIDEO ELEMENTS WITH VULGAR CONTEXT DETECTED');
+      return {
+        shouldBlock: true,
+        reason: 'Adult video content detected',
+        matchedPattern: 'Video elements with vulgar-related context'
+      };
+    }
+    
+    this.log('✅ No vulgar content detected - allowing page');
+    return {
+      shouldBlock: false,
+      reason: 'No vulgar content detected'
+    };
   }
 
   blockPage(reason) {
