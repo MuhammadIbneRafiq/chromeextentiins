@@ -62,6 +62,12 @@ class ContentAnalyzer {
     this.analyzed = true;
 
     try {
+      // COMPLETELY BYPASS Yuja platform - no extension functionality at all
+      if (window.location.hostname.includes('tue.video.yuja.com')) {
+        this.log('🎥 Yuja platform detected - completely bypassing extension functionality');
+        return;
+      }
+      
       // Skip if already on block page
       if (window.location.href.includes('block-page.html')) {
         this.log('🚫 Already on block page, skipping analysis');

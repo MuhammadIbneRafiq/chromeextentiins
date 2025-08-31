@@ -4,17 +4,17 @@ class DashboardManager {
     this.settings = {
       isEnabled: true,
       blockedSites: ['sflix.to', 'netflix.com', 'youtube.com', 'facebook.com', 'instagram.com', 'tiktok.com'],
-      allowedSites: ['stackoverflow.com', 'github.com', 'developer.mozilla.org', 'coursera.org', 'khan-academy.org'],
+      allowedSites: ['stackoverflow.com', 'github.com', 'github.com', 'developer.mozilla.org', 'coursera.org', 'khan-academy.org', 'tue.video.yuja.com'],
       focusMode: false,
       focusLock: false,
+      focusLockEndTime: null,
       allowedMetadata: {
         titleIncludes: [],
         descriptionIncludes: [],
         keywordsIncludes: []
       },
       presets: [],
-      schedule: [],
-      scheduleEnabled: false
+
     };
     this.init();
   }
@@ -33,7 +33,7 @@ class DashboardManager {
   async loadSettings() {
     try {
       console.log('📥 Loading settings from storage...');
-      const result = await chrome.storage.sync.get(['isEnabled', 'blockedSites', 'allowedSites', 'focusMode', 'focusLock', 'allowedMetadata', 'presets', 'schedule', 'scheduleEnabled']);
+      const result = await chrome.storage.sync.get(['isEnabled', 'blockedSites', 'allowedSites', 'focusMode', 'focusLock', 'focusLockEndTime', 'allowedMetadata', 'presets']);
       console.log('📥 Retrieved settings:', result);
       
       // Merge with defaults, ensuring all fields exist
@@ -50,7 +50,7 @@ class DashboardManager {
           topics: result.allowedMetadata?.topics || []
         },
         presets: result.presets || [],
-        schedule: result.schedule || []
+        focusLockEndTime: result.focusLockEndTime || null
       };
       
       console.log('✅ Settings loaded:', this.settings);

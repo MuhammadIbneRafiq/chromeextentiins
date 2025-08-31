@@ -3,9 +3,10 @@ class PopupManager {
     this.settings = {
       isEnabled: true,
       blockedSites: ['sflix.to', 'netflix.com', 'youtube.com', 'facebook.com', 'instagram.com', 'tiktok.com'],
-      allowedSites: ['stackoverflow.com', 'github.com', 'developer.mozilla.org', 'coursera.org', 'khan-academy.org'],
+      allowedSites: ['stackoverflow.com', 'github.com', 'developer.mozilla.org', 'coursera.org', 'khan-academy.org', 'tue.video.yuja.com'],
       focusMode: false,
       focusLock: false,
+      focusLockEndTime: null,
       allowedMetadata: {
         titleIncludes: [],
         descriptionIncludes: [],
@@ -22,8 +23,7 @@ class PopupManager {
           durationMin: 50
         }
       ],
-      schedule: [],
-      scheduleEnabled: false
+
     };
     this.init();
   }
@@ -46,7 +46,7 @@ class PopupManager {
   async loadSettings() {
     try {
       console.log('📥 Loading settings from storage...');
-      const result = await chrome.storage.sync.get(['isEnabled', 'blockedSites', 'allowedSites', 'focusMode', 'focusLock', 'allowedMetadata', 'presets', 'schedule', 'scheduleEnabled']);
+      const result = await chrome.storage.sync.get(['isEnabled', 'blockedSites', 'allowedSites', 'focusMode', 'focusLock', 'focusLockEndTime', 'allowedMetadata', 'presets']);
       console.log('📥 Retrieved settings:', result);
       
       // Merge with defaults, ensuring all fields exist
@@ -62,8 +62,7 @@ class PopupManager {
           keywordsIncludes: result.allowedMetadata?.keywordsIncludes || [],
           topics: result.allowedMetadata?.topics || []
         },
-        presets: result.presets || [],
-        schedule: result.schedule || []
+        presets: result.presets || []
       };
       
       console.log('✅ Settings loaded:', this.settings);
@@ -117,12 +116,31 @@ class PopupManager {
       this.showNotification('Focus metadata saved', 'success');
     });
 
-    // Focus lock toggle
+    // Focus lock toggle - now just shows/hides the timer input
     document.getElementById('focusLockToggle').addEventListener('change', (e) => {
-      this.settings.focusLock = e.target.checked;
-      this.saveSettings();
-      this.updateLockState();
-      this.showNotification(this.settings.focusLock ? 'Focus locked' : 'Focus unlocked', 'success');
+      if (e.target.checked) {
+        // Show timer input but DON'T activate lock yet
+        this.showTimerInput();
+      } else {
+        // Hide timer input and deactivate lock if it was active
+        this.hideTimerInput();
+        if (this.settings.focusLock) {
+          // If lock is active, prevent manual unlock and show warning
+          e.preventDefault();
+          e.target.checked = true; // Keep it checked
+          this.showNotification('Focus lock is active and cannot be disabled until timer expires', 'error');
+          return;
+        }
+        this.deactivateFocusLock();
+      }
+    });
+
+    // Note: Yuja platform (tue.video.yuja.com) is completely exempt from all extension functionality
+    // including focus locks, focus sessions, and content analysis
+
+    // Activate focus lock button with confirmation
+    document.getElementById('activateFocusLock')?.addEventListener('click', () => {
+      this.activateFocusLockWithConfirmation();
     });
 
     // Debug console controls
@@ -207,29 +225,7 @@ class PopupManager {
       this.showNotification('Preset saved', 'success');
     });
 
-    // Schedule add
-    document.getElementById('addSchedule').addEventListener('click', () => {
-      if (this.settings.focusLock) { this.showNotification('Focus is locked', 'info'); return; }
-      const name = document.getElementById('schedName').value.trim();
-      const domains = document.getElementById('schedDomains').value.split(',').map(s=>s.trim()).filter(Boolean);
-      const topics = document.getElementById('schedTopics').value.split(',').map(s=>s.trim()).filter(Boolean);
-      const start = document.getElementById('schedStart').value;
-      const end = document.getElementById('schedEnd').value;
-      const days = document.getElementById('schedDays').value.split(',').map(s=>Number(s.trim())).filter(n=>!isNaN(n));
-      if (!name || domains.length===0 || !start || !end || days.length===0) { this.showNotification('Fill all schedule fields', 'info'); return; }
-      const item = { id: `sch_${Date.now()}`, name, domains, topics, start, end, days };
-      this.settings.schedule.push(item);
-      this.saveSettings();
-      this.renderSchedule();
-      this.showNotification('Schedule added', 'success');
-    });
 
-    // Schedule toggle
-    document.getElementById('scheduleEnabled').addEventListener('change', (e) => {
-      this.settings.scheduleEnabled = e.target.checked;
-      this.saveSettings();
-      this.showNotification(this.settings.scheduleEnabled ? 'Schedule enabled' : 'Schedule disabled', 'success');
-    });
 
     // Add event delegation for dynamically created elements
     this.addDynamicEventListeners();
@@ -259,23 +255,229 @@ class PopupManager {
     document.getElementById('allowedDescContains').value = (this.settings.allowedMetadata.descriptionIncludes || []).join(', ');
     document.getElementById('allowedKeywordsContains').value = (this.settings.allowedMetadata.keywordsIncludes || []).join(', ');
 
-    // Presets and schedule
+    // Presets
     this.renderPresets();
-    this.renderSchedule();
     this.renderHistory();
     
     // Check for active session and update UI accordingly
     this.checkActiveSession();
     
+    // Start timer update interval
+    this.startTimerUpdate();
+    
     console.log('✅ UI Updated');
+  }
+
+  startTimerUpdate() {
+    // Update focus lock timer every minute
+    setInterval(() => {
+      this.updateFocusLockTimer();
+    }, 60000); // Every minute
+    
+    // Initial update
+    this.updateFocusLockTimer();
   }
 
   updateLockState() {
     const disabled = !!this.settings.focusLock;
+    const lockToggle = document.getElementById('focusLockToggle');
+    const timerGroup = document.getElementById('focusLockTimerGroup');
+    
+    // Disable controls when locked
     ['enabledToggle','focusToggle','saveFocusSettings','allowedTitleContains','allowedDescContains','allowedKeywordsContains'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.disabled = disabled;
     });
+    
+    // IMPORTANT: When lock is active, disable the toggle itself and show it's locked
+    if (lockToggle) {
+      if (disabled) {
+        lockToggle.disabled = true;
+        lockToggle.style.opacity = '0.6';
+        lockToggle.style.cursor = 'not-allowed';
+        // Add visual indicator that it's locked
+        lockToggle.title = 'Focus lock is active - cannot be manually disabled until timer expires';
+      } else {
+        lockToggle.disabled = false;
+        lockToggle.style.opacity = '1';
+        lockToggle.style.cursor = 'pointer';
+        lockToggle.title = 'Lock Focus & Protection (prevents turning off during sessions)';
+      }
+    }
+    
+    // Show/hide lock status indicator
+    const lockStatusIndicator = document.getElementById('lockStatusIndicator');
+    if (lockStatusIndicator) {
+      if (disabled) {
+        lockStatusIndicator.style.display = 'block';
+        // Update status message with remaining time
+        const lockStatusMessage = document.getElementById('lockStatusMessage');
+        if (lockStatusMessage && this.settings.focusLockEndTime) {
+          const timeRemaining = this.settings.focusLockEndTime - Date.now();
+          if (timeRemaining > 0) {
+            const hours = Math.floor(timeRemaining / (60 * 60 * 1000));
+            const minutes = Math.floor((timeRemaining % (60 * 60 * 1000)) / (60 * 1000));
+            lockStatusMessage.textContent = `Cannot be manually disabled - ${hours}h ${minutes}m remaining`;
+          } else {
+            lockStatusMessage.textContent = 'Cannot be manually disabled until timer expires';
+          }
+        }
+      } else {
+        lockStatusIndicator.style.display = 'none';
+      }
+    }
+    
+    // Show timer input when lock toggle is checked (even if not active yet)
+    if (timerGroup) {
+      timerGroup.style.display = lockToggle && lockToggle.checked ? 'block' : 'none';
+    }
+    
+    // Update timer input values if lock is active
+    if (disabled && this.settings.focusLockEndTime) {
+      const hoursInput = document.getElementById('focusLockHours');
+      const minutesInput = document.getElementById('focusLockMinutes');
+      if (hoursInput && minutesInput) {
+        const timeRemaining = this.settings.focusLockEndTime - Date.now();
+        const remainingHours = Math.floor(timeRemaining / (60 * 60 * 1000));
+        const remainingMinutes = Math.floor((timeRemaining % (60 * 60 * 1000)) / (60 * 1000));
+        hoursInput.value = Math.max(0, remainingHours);
+        minutesInput.value = Math.max(1, remainingMinutes);
+      }
+    }
+    
+    // Check if lock should auto-expire
+    if (disabled && this.settings.focusLockEndTime && Date.now() >= this.settings.focusLockEndTime) {
+      this.autoUnlockFocus();
+    }
+    
+    // Update timer display
+    this.updateFocusLockTimer();
+  }
+
+  autoUnlockFocus() {
+    console.log('🔓 Auto-unlocking focus lock - timer expired');
+    this.settings.focusLock = false;
+    this.settings.focusLockEndTime = null;
+    this.saveSettings();
+    
+    // Update UI
+    const lockToggle = document.getElementById('focusLockToggle');
+    if (lockToggle) {
+      lockToggle.checked = false;
+    }
+    
+    // Reset page title
+    document.title = 'AI Guardian';
+    
+    this.updateLockState();
+    this.showNotification('Focus lock automatically expired', 'success');
+  }
+
+  updateFocusLockTimer() {
+    if (!this.settings.focusLock || !this.settings.focusLockEndTime) {
+      const timerDisplay = document.getElementById('focusLockTimerDisplay');
+      if (timerDisplay) {
+        timerDisplay.style.display = 'none';
+      }
+      return;
+    }
+
+    const now = Date.now();
+    const timeRemaining = this.settings.focusLockEndTime - now;
+    
+    if (timeRemaining <= 0) {
+      this.autoUnlockFocus();
+      return;
+    }
+
+    const hours = Math.floor(timeRemaining / (60 * 60 * 1000));
+    const minutes = Math.floor((timeRemaining % (60 * 60 * 1000)) / (60 * 1000));
+    
+    const timeRemainingEl = document.getElementById('focusLockTimeRemaining');
+    const timerDisplay = document.getElementById('focusLockTimerDisplay');
+    
+    if (timeRemainingEl && timerDisplay) {
+      timeRemainingEl.textContent = `${hours}h ${minutes}m`;
+      timerDisplay.style.display = 'block';
+      
+      // Make timer display more prominent when locked
+      timerDisplay.style.background = 'rgba(220, 38, 38, 0.1)';
+      timerDisplay.style.border = '2px solid #dc2626';
+      timerDisplay.style.color = '#dc2626';
+      timerDisplay.style.fontWeight = 'bold';
+      
+      // Also update the page title to show remaining time
+      if (hours > 0 || minutes > 0) {
+        document.title = `🔒 Focus Lock: ${hours}h ${minutes}m remaining - AI Guardian`;
+      }
+    }
+  }
+
+  showTimerInput() {
+    const timerGroup = document.getElementById('focusLockTimerGroup');
+    if (timerGroup) {
+      timerGroup.style.display = 'block';
+    }
+  }
+
+  hideTimerInput() {
+    const timerGroup = document.getElementById('focusLockTimerGroup');
+    if (timerGroup) {
+      timerGroup.style.display = 'none';
+    }
+  }
+
+  activateFocusLockWithConfirmation() {
+    const hours = parseInt(document.getElementById('focusLockHours').value) || 0;
+    const minutes = parseInt(document.getElementById('focusLockMinutes').value) || 30;
+    
+    if (hours === 0 && minutes === 0) {
+      this.showNotification('Please set a duration greater than 0', 'error');
+      return;
+    }
+
+    const totalMinutes = (hours * 60) + minutes;
+    const confirmMessage = `Are you sure you want to lock focus for ${hours}h ${minutes}m?\n\nThis will:\n• Disable all protection toggles\n• Prevent changing settings\n• Auto-unlock after ${totalMinutes} minutes\n\nYou CANNOT manually unlock until the timer expires!`;
+    
+    if (confirm(confirmMessage)) {
+      this.activateFocusLock(hours, minutes);
+    }
+  }
+
+  activateFocusLock(hours, minutes) {
+    const totalMs = ((hours * 60) + minutes) * 60 * 1000;
+    this.settings.focusLockEndTime = Date.now() + totalMs;
+    this.settings.focusLock = true;
+    this.saveSettings();
+    
+    // Update UI
+    const lockToggle = document.getElementById('focusLockToggle');
+    if (lockToggle) {
+      lockToggle.checked = true;
+    }
+    
+    this.updateLockState();
+    this.showNotification(`Focus locked for ${hours}h ${minutes}m`, 'success');
+    
+    // Set timer to automatically unlock
+    setTimeout(() => {
+      this.autoUnlockFocus();
+    }, totalMs);
+  }
+
+  deactivateFocusLock() {
+    this.settings.focusLock = false;
+    this.settings.focusLockEndTime = null;
+    this.saveSettings();
+    
+    // Update UI
+    const lockToggle = document.getElementById('focusLockToggle');
+    if (lockToggle) {
+      lockToggle.checked = false;
+    }
+    
+    this.updateLockState();
+    this.showNotification('Focus unlocked', 'success');
   }
 
   renderPresets() {
@@ -354,33 +556,9 @@ class PopupManager {
     this.renderPresets();
   }
 
-  renderSchedule() {
-    const list = document.getElementById('scheduleList');
-    const enabledEl = document.getElementById('scheduleEnabled');
-    list.innerHTML='';
-    (this.settings.schedule||[]).forEach(s => {
-      const div = document.createElement('div');
-      div.className = 'site-item';
-      div.innerHTML = `
-        <div>
-          <div><strong>${s.name}</strong> • ${s.start}–${s.end} • days: ${(s.days||[]).join(',')}</div>
-          <div style="font-size:12px;color:#64748b;">${(s.domains||[]).join(', ')}</div>
-        </div>
-        <button class="remove-site schedule-delete-btn" data-schedule-id="${s.id}">×</button>
-      `;
-      list.appendChild(div);
-    });
-    
-    // Add event listeners to the newly created buttons
-    this.addScheduleEventListeners();
-  }
 
-  deleteSchedule(id) {
-    if (this.settings.focusLock) { this.showNotification('Focus is locked', 'info'); return; }
-    this.settings.schedule = (this.settings.schedule||[]).filter(x=>x.id!==id);
-    this.saveSettings();
-    this.renderSchedule();
-  }
+
+
 
   renderHistory() {
     const list = document.getElementById('historyList');
@@ -627,19 +805,7 @@ class PopupManager {
     });
   }
 
-  // Add event listeners to schedule buttons using event delegation
-  addScheduleEventListeners() {
-    const list = document.getElementById('scheduleList');
-    if (!list) return;
-    
-    // Handle schedule delete buttons
-    list.addEventListener('click', (e) => {
-      if (e.target.classList.contains('schedule-delete-btn')) {
-        const scheduleId = e.target.getAttribute('data-schedule-id');
-        this.deleteSchedule(scheduleId);
-      }
-    });
-  }
+
 
   // Add event delegation for all dynamically created elements
   addDynamicEventListeners() {

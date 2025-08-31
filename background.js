@@ -5,7 +5,7 @@ class ProductivityGuardian {
     this.groqApiUrl = 'https://api.groq.com/openai/v1/chat/completions';
     this.isEnabled = true;
     this.blockedSites = ['sflix.to', 'netflix.com', 'youtube.com', 'facebook.com', 'instagram.com', 'tiktok.com'];
-    this.allowedSites = ['stackoverflow.com', 'github.com', 'developer.mozilla.org', 'coursera.org', 'khan-academy.org'];
+    this.allowedSites = ['stackoverflow.com', 'github.com', 'developer.mozilla.org', 'coursera.org', 'khan-academy.org', 'tue.video.yuja.com'];
     this.focusMode = false;
     this.allowedMetadata = {
       titleIncludes: [],
@@ -17,8 +17,8 @@ class ProductivityGuardian {
     this.version = '1.1.0';
     this.currentSession = null; // { id, name, allowedDomains[], allowedMetadata{topics[]}, maxExtraDomains, endTime }
     this.sessionTimerId = null;
-    this.schedule = [];
-    this.scheduleEnabled = false;
+    this.focusLockEndTime = null;
+
     this.debugMode = true; // Enable debug mode by default
     this.init();
   }
@@ -84,7 +84,7 @@ class ProductivityGuardian {
 
   async init() {
     // Load settings from storage
-    const result = await chrome.storage.sync.get(['groqApiKey', 'isEnabled', 'blockedSites', 'allowedSites', 'focusMode', 'allowedMetadata', 'focusLock', 'currentSession', 'schedule', 'scheduleEnabled']);
+    const result = await chrome.storage.sync.get(['groqApiKey', 'isEnabled', 'blockedSites', 'allowedSites', 'focusMode', 'allowedMetadata', 'focusLock', 'focusLockEndTime', 'currentSession']);
     if (result.groqApiKey) this.groqApiKey = result.groqApiKey;
     if (!this.groqApiKey && typeof DEFAULT_ENCODED_KEY === 'string' && DEFAULT_ENCODED_KEY.length > 0) {
       try { this.groqApiKey = atob(DEFAULT_ENCODED_KEY); } catch {}
@@ -95,8 +95,8 @@ class ProductivityGuardian {
     if (result.focusMode !== undefined) this.focusMode = result.focusMode;
     if (result.allowedMetadata) this.allowedMetadata = result.allowedMetadata;
     this.focusLock = !!result.focusLock;
-    if (Array.isArray(result.schedule)) this.schedule = result.schedule;
-    if (typeof result.scheduleEnabled === 'boolean') this.scheduleEnabled = result.scheduleEnabled;
+    if (result.focusLockEndTime) this.focusLockEndTime = result.focusLockEndTime;
+
     if (result.currentSession) {
       this.currentSession = result.currentSession;
       this.refreshSessionState?.();
@@ -111,6 +111,18 @@ class ProductivityGuardian {
     }
     
     this.log(`AI Productivity Guardian v${this.version} initialized`);
+    
+    // Check if focus lock should auto-expire
+    this.checkFocusLockExpiry();
+  }
+
+  checkFocusLockExpiry() {
+    if (this.focusLock && this.focusLockEndTime && Date.now() >= this.focusLockEndTime) {
+      this.log('🔓 Focus lock auto-expired');
+      this.focusLock = false;
+      this.focusLockEndTime = null;
+      this.updateSettings({});
+    }
   }
 
   setupListeners() {
@@ -131,6 +143,13 @@ class ProductivityGuardian {
     // Handle messages from content script
     chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       try {
+        // COMPLETELY BYPASS Yuja platform - no extension functionality at all
+        if (sender?.tab?.url && sender.tab.url.includes('tue.video.yuja.com')) {
+          this.log('🎥 Yuja platform detected in message - completely bypassing extension functionality');
+          sendResponse({ shouldBlock: false, reason: 'Yuja platform - completely exempt from extension', bypassExtension: true });
+          return true;
+        }
+        
         if (request.action === 'analyzeContent') {
           const result = await this.analyzeContentWithAI(request.data);
           sendResponse(result);
@@ -165,13 +184,7 @@ class ProductivityGuardian {
       return true;
     });
 
-    // Alarms for schedule
-    chrome.alarms.onAlarm.addListener((alarm) => {
-      if (alarm && alarm.name === 'focus_schedule_tick') {
-        this.tickSchedule?.();
-      }
-    });
-    chrome.alarms.create('focus_schedule_tick', { periodInMinutes: 1 });
+
   }
 
   async checkApiConnection() {
@@ -214,6 +227,12 @@ class ProductivityGuardian {
     try {
       this.log('🔍 AI Productivity Guardian - Analyzing URL');
       this.log('📍 URL:', url);
+      
+      // COMPLETELY BYPASS Yuja platform - no extension functionality at all
+      if (url.includes('tue.video.yuja.com')) {
+        this.log('🎥 Yuja platform detected - completely bypassing extension functionality');
+        return;
+      }
       
       // Skip chrome:// and extension pages
       if (url.startsWith('chrome://') || url.startsWith('chrome-extension://') || url.startsWith('brave://')) {
@@ -317,34 +336,7 @@ class ProductivityGuardian {
     this.log('─'.repeat(50));
   }
 
-  tickSchedule() {
-    if (!this.scheduleEnabled || !Array.isArray(this.schedule) || this.schedule.length === 0) return;
-    const now = new Date();
-    const day = now.getDay();
-    const hh = String(now.getHours()).padStart(2,'0');
-    const mm = String(now.getMinutes()).padStart(2,'0');
-    const cur = `${hh}:${mm}`;
 
-    const active = this.schedule.find(s => (s.days||[]).includes(day) && s.start <= cur && cur < s.end);
-    if (active) {
-      const remainingMs = this.msUntil(active.end);
-      const minutes = Math.max(1, Math.ceil(remainingMs/60000));
-      this.startSession?.({
-        name: active.name,
-        allowedDomains: active.domains || [],
-        allowedMetadata: this.allowedMetadata,
-        durationMin: minutes
-      });
-    }
-  }
-
-  msUntil(hhmm) {
-    const [h,m] = hhmm.split(':').map(x=>Number(x));
-    const now = new Date();
-    const end = new Date();
-    end.setHours(h, m, 0, 0);
-    return Math.max(0, end.getTime() - now.getTime());
-  }
   async isBypassActive(hostname) {
     try {
       const res = await chrome.storage.local.get(['bypassAllowMap']);
@@ -564,8 +556,7 @@ Be strict for productivity - when uncertain, choose BLOCK.`;
       focusLock: this.focusLock,
       allowedMetadata: this.allowedMetadata,
       currentSession: this.currentSession,
-      schedule: this.schedule,
-      scheduleEnabled: this.scheduleEnabled
+
     });
 
     // Check API if key changed

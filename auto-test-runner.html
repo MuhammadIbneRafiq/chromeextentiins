@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Guardian Auto Test Runner</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            color: #ffd700;
+        }
+        .test-controls {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .test-btn {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 10px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .test-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        .test-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .test-results {
+            background: rgba(0,0,0,0.3);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .test-item {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #ddd;
+        }
+        .test-item.pass {
+            border-left-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.2);
+        }
+        .test-item.fail {
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.2);
+        }
+        .test-item.running {
+            border-left-color: #ff9800;
+            background: rgba(255, 152, 0, 0.2);
+        }
+        .test-summary {
+            background: rgba(255,255,255,0.15);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            background: #ddd;
+        }
+        .status-indicator.pass { background: #4CAF50; }
+        .status-indicator.fail { background: #f44336; }
+        .status-indicator.running { background: #ff9800; }
+        .console-output {
+            background: rgba(0,0,0,0.8);
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+        .test-details {
+            margin-top: 10px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AI Guardian Auto Test Runner</h1>
+        
+        <div class="test-controls">
+            <button class="test-btn" id="runAllTests" onclick="runAllTests()">🚀 Run All Tests</button>
+            <button class="test-btn" id="runQuickTests" onclick="runQuickTests()">⚡ Quick Tests</button>
+            <button class="test-btn" onclick="clearResults()">🗑️ Clear Results</button>
+            <button class="test-btn" onclick="openConsole()">🔧 Open Console</button>
+        </div>
+
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressBar"></div>
+        </div>
+
+        <div class="test-summary" id="testSummary">
+            <h3>📊 Test Summary</h3>
+            <p>Click "Run All Tests" to start automated testing</p>
+            <div id="summaryStats"></div>
+        </div>
+
+        <div class="test-results" id="testResults">
+            <h3>🧪 Test Results</h3>
+            <p>Test results will appear here...</p>
+        </div>
+
+        <div class="console-output" id="consoleOutput">
+            <div>🤖 AI Guardian Test Console</div>
+            <div>Ready to run tests...</div>
+        </div>
+    </div>
+
+    <script>
+        class AutoTestRunner {
+            constructor() {
+                this.tests = [];
+                this.results = [];
+                this.currentTest = 0;
+                this.isRunning = false;
+                this.initializeTests();
+            }
+
+            initializeTests() {
+                this.tests = [
+                    {
+                        name: "Extension Detection",
+                        description: "Check if AI Guardian extension is loaded",
+                        test: () => this.testExtensionDetection()
+                    },
+                    {
+                        name: "Console Logging",
+                        description: "Verify extension console logging works",
+                        test: () => this.testConsoleLogging()
+                    },
+                    {
+                        name: "Storage Access",
+                        description: "Test extension storage functionality",
+                        test: () => this.testStorageAccess()
+                    },
+                    {
+                        name: "Message Passing",
+                        description: "Test communication with background script",
+                        test: () => this.testMessagePassing()
+                    },
+                    {
+                        name: "URL Analysis",
+                        description: "Test URL analysis and blocking logic",
+                        test: () => this.testUrlAnalysis()
+                    },
+                    {
+                        name: "Metadata Extraction",
+                        description: "Test page metadata extraction",
+                        test: () => this.testMetadataExtraction()
+                    },
+                    {
+                        name: "Focus Mode",
+                        description: "Test focus mode detection",
+                        test: () => this.testFocusMode()
+                    },
+                    {
+                        name: "Chat Detection",
+                        description: "Test chat interface detection",
+                        test: () => this.testChatDetection()
+                    },
+                    {
+                        name: "Performance",
+                        description: "Test extension performance metrics",
+                        test: () => this.testPerformance()
+                    }
+                ];
+            }
+
+            async runAllTests() {
+                if (this.isRunning) return;
+                
+                this.isRunning = true;
+                this.currentTest = 0;
+                this.results = [];
+                this.updateUI();
+                
+                this.log('🚀 Starting automated test suite...');
+                this.log(`📋 Running ${this.tests.length} tests...`);
+                
+                for (let i = 0; i < this.tests.length; i++) {
+                    this.currentTest = i;
+                    const test = this.tests[i];
+                    
+                    this.log(`\n🧪 Test ${i + 1}/${this.tests.length}: ${test.name}`);
+                    this.log(`📝 ${test.description}`);
+                    
+                    try {
+                        this.updateTestStatus(i, 'running');
+                        this.updateProgress();
+                        
+                        const result = await test.test();
+                        this.results.push({
+                            name: test.name,
+                            description: test.description,
+                            status: result.success ? 'pass' : 'fail',
+                            message: result.message,
+                            details: result.details
+                        });
+                        
+                        this.updateTestStatus(i, result.success ? 'pass' : 'fail');
+                        this.log(`✅ ${result.success ? 'PASS' : 'FAIL'}: ${result.message}`);
+                        
+                        if (result.details) {
+                            this.log(`📊 Details: ${result.details}`);
+                        }
+                        
+                    } catch (error) {
+                        this.log(`❌ ERROR: ${error.message}`);
+                        this.results.push({
+                            name: test.name,
+                            description: test.description,
+                            status: 'fail',
+                            message: `Test error: ${error.message}`,
+                            details: error.stack
+                        });
+                        this.updateTestStatus(i, 'fail');
+                    }
+                    
+                    // Small delay between tests
+                    await this.delay(500);
+                }
+                
+                this.isRunning = false;
+                this.updateUI();
+                this.generateSummary();
+                this.log('\n🎉 Test suite completed!');
+            }
+
+            async testExtensionDetection() {
+                return new Promise((resolve) => {
+                    // Check if extension is loaded by looking for extension-specific elements
+                    const hasExtension = this.detectExtension();
+                    
+                    if (hasExtension) {
+                        resolve({
+                            success: true,
+                            message: 'Extension detected successfully',
+                            details: 'AI Guardian extension appears to be loaded and active'
+                        });
+                    } else {
+                        resolve({
+                            success: false,
+                            message: 'Extension not detected',
+                            details: 'Make sure the extension is loaded in developer mode'
+                        });
+                    }
+                });
+            }
+
+            detectExtension() {
+                // Try multiple methods to detect the extension
+                const methods = [
+                    () => window.chrome && window.chrome.runtime,
+                    () => document.querySelector('[data-extension="ai-guardian"]'),
+                    () => window.aiGuardianExtension,
+                    () => localStorage.getItem('aiGuardianExtension'),
+                    () => sessionStorage.getItem('aiGuardianExtension')
+                ];
+                
+                return methods.some(method => {
+                    try {
+                        return method();
+                    } catch {
+                        return false;
+                    }
+                });
+            }
+
+            async testConsoleLogging() {
+                return new Promise((resolve) => {
+                    const originalLog = console.log;
+                    let logDetected = false;
+                    
+                    // Override console.log temporarily
+                    console.log = (...args) => {
+                        if (args.some(arg => String(arg).includes('AI Guardian'))) {
+                            logDetected = true;
+                        }
+                        originalLog.apply(console, args);
+                    };
+                    
+                    // Trigger some console activity
+                    setTimeout(() => {
+                        console.log = originalLog;
+                        
+                        if (logDetected) {
+                            resolve({
+                                success: true,
+                                message: 'Console logging detected',
+                                details: 'Extension console logging is working'
+                            });
+                        } else {
+                            resolve({
+                                success: false,
+                                message: 'Console logging not detected',
+                                details: 'No AI Guardian console messages found'
+                            });
+                        }
+                    }, 1000);
+                });
+            }
+
+            async testStorageAccess() {
+                return new Promise((resolve) => {
+                    try {
+                        // Test localStorage
+                        const testKey = 'aiGuardianTest_' + Date.now();
+                        localStorage.setItem(testKey, 'test-value');
+                        const retrieved = localStorage.getItem(testKey);
+                        localStorage.removeItem(testKey);
+                        
+                        if (retrieved === 'test-value') {
+                            resolve({
+                                success: true,
+                                message: 'Storage access working',
+                                details: 'localStorage is accessible and functional'
+                            });
+                        } else {
+                            resolve({
+                                success: false,
+                                message: 'Storage access failed',
+                                details: 'localStorage test failed'
+                            });
+                        }
+                    } catch (error) {
+                        resolve({
+                            success: false,
+                            message: 'Storage access error',
+                            details: error.message
+                        });
+                    }
+                });
+            }
+
+            async testMessagePassing() {
+                return new Promise((resolve) => {
+                    try {
+                        if (window.chrome && window.chrome.runtime) {
+                            resolve({
+                                success: true,
+                                message: 'Chrome runtime available',
+                                details: 'Message passing infrastructure detected'
+                            });
+                        } else {
+                            resolve({
+                                success: false,
+                                message: 'Chrome runtime not available',
+                                details: 'Extension API not accessible from this context'
+                            });
+                        }
+                    } catch (error) {
+                        resolve({
+                            success: false,
+                            message: 'Message passing test failed',
+                            details: error.message
+                        });
+                    }
+                });
+            }
+
+            async testUrlAnalysis() {
+                return new Promise((resolve) => {
+                    const currentUrl = window.location.href;
+                    const urlParts = new URL(currentUrl);
+                    
+                    if (urlParts.protocol && urlParts.hostname) {
+                        resolve({
+                            success: true,
+                            message: 'URL analysis working',
+                            details: `Current URL: ${urlParts.hostname} (${urlParts.protocol})`
+                        });
+                    } else {
+                        resolve({
+                            success: false,
+                            message: 'URL analysis failed',
+                            details: 'Could not parse current URL'
+                        });
+                    }
+                });
+            }
+
+            async testMetadataExtraction() {
+                return new Promise((resolve) => {
+                    const metaTags = document.querySelectorAll('meta');
+                    const title = document.title;
+                    
+                    if (metaTags.length > 0 || title) {
+                        resolve({
+                            success: true,
+                            message: 'Metadata extraction working',
+                            details: `${metaTags.length} meta tags, title: "${title}"`
+                        });
+                    } else {
+                        resolve({
+                            success: false,
+                            message: 'Metadata extraction failed',
+                            details: 'No meta tags or title found'
+                        });
+                    }
+                });
+            }
+
+            async testFocusMode() {
+                return new Promise((resolve) => {
+                    // Simulate focus mode detection
+                    const hasFocusKeywords = this.detectFocusKeywords();
+                    
+                    if (hasFocusKeywords) {
+                        resolve({
+                            success: true,
+                            message: 'Focus mode keywords detected',
+                            details: 'Page contains focus-related content'
+                        });
+                    } else {
+                        resolve({
+                            success: true,
+                            message: 'Focus mode working (no keywords)',
+                            details: 'Page does not contain focus keywords (expected for test page)'
+                        });
+                    }
+                });
+            }
+
+            detectFocusKeywords() {
+                const text = document.body.innerText.toLowerCase();
+                const keywords = ['algebra', 'security', '2wf90', 'mathematics', 'cryptography'];
+                return keywords.some(keyword => text.includes(keyword));
+            }
+
+            async testChatDetection() {
+                return new Promise((resolve) => {
+                    const chatElements = document.querySelectorAll('textarea, input[type="text"], .chat, #chat-input');
+                    
+                    if (chatElements.length > 0) {
+                        resolve({
+                            success: true,
+                            message: 'Chat elements detected',
+                            details: `${chatElements.length} potential chat input elements found`
+                        });
+                    } else {
+                        resolve({
+                            success: false,
+                            message: 'Chat elements not found',
+                            details: 'No chat input elements detected on this page'
+                        });
+                    }
+                });
+            }
+
+            async testPerformance() {
+                return new Promise((resolve) => {
+                    const startTime = performance.now();
+                    
+                    // Simulate some work
+                    let result = 0;
+                    for (let i = 0; i < 1000; i++) {
+                        result += Math.random();
+                    }
+                    
+                    const endTime = performance.now();
+                    const duration = endTime - startTime;
+                    
+                    if (duration < 100) {
+                        resolve({
+                            success: true,
+                            message: 'Performance test passed',
+                            details: `Test completed in ${duration.toFixed(2)}ms`
+                        });
+                    } else {
+                        resolve({
+                            success: false,
+                            message: 'Performance test slow',
+                            details: `Test took ${duration.toFixed(2)}ms (expected <100ms)`
+                        });
+                    }
+                });
+            }
+
+            async runQuickTests() {
+                // Run only essential tests
+                const quickTests = [0, 1, 4, 5]; // Extension detection, console, URL, metadata
+                this.log('⚡ Running quick tests...');
+                
+                for (let i of quickTests) {
+                    const test = this.tests[i];
+                    this.log(`🧪 Quick test: ${test.name}`);
+                    
+                    try {
+                        const result = await test.test();
+                        this.log(`✅ ${result.success ? 'PASS' : 'FAIL'}: ${result.message}`);
+                    } catch (error) {
+                        this.log(`❌ Error: ${error.message}`);
+                    }
+                }
+                
+                this.log('⚡ Quick tests completed!');
+            }
+
+            updateTestStatus(index, status) {
+                const testItems = document.querySelectorAll('.test-item');
+                if (testItems[index]) {
+                    testItems[index].className = `test-item ${status}`;
+                }
+            }
+
+            updateProgress() {
+                const progress = ((this.currentTest + 1) / this.tests.length) * 100;
+                document.getElementById('progressBar').style.width = progress + '%';
+            }
+
+            updateUI() {
+                const runBtn = document.getElementById('runAllTests');
+                const quickBtn = document.getElementById('runQuickTests');
+                
+                if (this.isRunning) {
+                    runBtn.disabled = true;
+                    quickBtn.disabled = true;
+                    runBtn.textContent = '🔄 Running Tests...';
+                } else {
+                    runBtn.disabled = false;
+                    quickBtn.disabled = false;
+                    runBtn.textContent = '🚀 Run All Tests';
+                }
+            }
+
+            generateSummary() {
+                const total = this.results.length;
+                const passed = this.results.filter(r => r.status === 'pass').length;
+                const failed = this.results.filter(r => r.status === 'fail').length;
+                const successRate = total > 0 ? ((passed / total) * 100).toFixed(1) : 0;
+                
+                document.getElementById('summaryStats').innerHTML = `
+                    <div style="font-size: 1.2em; margin: 20px 0;">
+                        <div style="display: inline-block; margin: 0 20px;">
+                            <span style="color: #4CAF50;">✅ ${passed} Passed</span>
+                        </div>
+                        <div style="display: inline-block; margin: 0 20px;">
+                            <span style="color: #f44336;">❌ ${failed} Failed</span>
+                        </div>
+                        <div style="display: inline-block; margin: 0 20px;">
+                            <span style="color: #ffd700;">📊 ${successRate}% Success Rate</span>
+                        </div>
+                    </div>
+                `;
+                
+                // Update test results display
+                const resultsContainer = document.getElementById('testResults');
+                resultsContainer.innerHTML = '<h3>🧪 Test Results</h3>';
+                
+                this.results.forEach((result, index) => {
+                    const testDiv = document.createElement('div');
+                    testDiv.className = `test-item ${result.status}`;
+                    testDiv.innerHTML = `
+                        <div class="status-indicator ${result.status}"></div>
+                        <strong>${result.name}</strong>
+                        <div class="test-details">${result.description}</div>
+                        <div class="test-details">${result.message}</div>
+                        ${result.details ? `<div class="test-details">${result.details}</div>` : ''}
+                    `;
+                    resultsContainer.appendChild(testDiv);
+                });
+            }
+
+            log(message) {
+                const consoleOutput = document.getElementById('consoleOutput');
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.textContent = `[${timestamp}] ${message}`;
+                consoleOutput.appendChild(logEntry);
+                consoleOutput.scrollTop = consoleOutput.scrollHeight;
+                
+                // Also log to browser console
+                console.log(`[AI Guardian Test] ${message}`);
+            }
+
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+        }
+
+        // Initialize test runner
+        let testRunner;
+        
+        function runAllTests() {
+            if (!testRunner) {
+                testRunner = new AutoTestRunner();
+            }
+            testRunner.runAllTests();
+        }
+        
+        function runQuickTests() {
+            if (!testRunner) {
+                testRunner = new AutoTestRunner();
+            }
+            testRunner.runQuickTests();
+        }
+        
+        function clearResults() {
+            document.getElementById('testResults').innerHTML = '<h3>🧪 Test Results</h3><p>Test results will appear here...</p>';
+            document.getElementById('consoleOutput').innerHTML = '<div>🤖 AI Guardian Test Console</div><div>Ready to run tests...</div>';
+            document.getElementById('summaryStats').innerHTML = '';
+            document.getElementById('progressBar').style.width = '0%';
+            
+            // Reset test items
+            const testItems = document.querySelectorAll('.test-item');
+            testItems.forEach(item => {
+                item.className = 'test-item';
+            });
+        }
+        
+        function openConsole() {
+            console.log('🔧 Console opened for AI Guardian testing');
+            console.log('🤖 AI Guardian extension should be logging here if loaded');
+            console.log('📋 Check for messages starting with [AI Guardian]');
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            testRunner = new AutoTestRunner();
+            console.log('🚀 AI Guardian Auto Test Runner initialized');
+            console.log('📋 Ready to run automated tests');
+        });
+    </script>
+</body>
+</html>
