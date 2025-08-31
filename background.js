@@ -452,18 +452,18 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
       'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
       
       // Streaming platforms (exact matches)
-      'netflix', 'hulu', 'disney+', 'disneyplus', 'amazon prime', 'prime video',
+      'netflix', 'hulu', 'disney+', 'disneyplus', 'amazon prime', 'prime',
       'hbo max', 'hbomax', 'peacock', 'paramount+', 'paramountplus',
       'apple tv', 'appletv', 'crunchyroll', 'funimation', 'vudu',
       
       // Movie-related phrases (exact matches)
-      'watch online', 'stream online', 'free movies', 'hd movies', 'full movie',
-      'movie streaming', 'film streaming', 'watch free', 'free streaming',
+      'watch online', 'free movies', 'hd movies', 'full movie',
+      'movie', 'film',
       'movie download', 'film download', 'torrent', 'streaming site',
       
       // Entertainment terms (exact matches)
       'entertainment', 'tv shows', 'television', 'series', 'episode',
-      'season', 'watch', 'stream', 'streaming', 'video', 'videos',
+      'season',
       
       // Common movie site patterns (exact matches)
       'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
@@ -526,7 +526,7 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
     const vulgarKeywords = [
       // Explicit vulgar terms (exact matches)
       'fuck', 'shit', 'pussy', 'dick', 'cunt', 'asshole', 'bitch', 'slut',
-      'nigga', 'nigger', 'whore', 'hoe', 'cock', 'penis', 'vagina', 'ass',
+      'nigga', 'nigger', 'whore', 'hoe', 'cock', 'penis', 'vagina',
       
       // Adult content terms (exact matches)
       'porn', 'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn',

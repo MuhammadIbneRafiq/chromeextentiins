@@ -831,18 +831,18 @@ class ContentAnalyzer {
       'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
       
       // Streaming platforms (exact matches)
-      'netflix', 'hulu', 'disney+', 'disneyplus', 'amazon prime', 'prime video',
+      'netflix', 'hulu', 'disney+', 'disneyplus', 'amazon prime', 'prime',
       'hbo max', 'hbomax', 'peacock', 'paramount+', 'paramountplus',
       'apple tv', 'appletv', 'crunchyroll', 'funimation', 'vudu',
       
       // Movie-related phrases (exact matches)
-      'watch online', 'stream online', 'free movies', 'hd movies', 'full movie',
-      'movie streaming', 'film streaming', 'watch free', 'free streaming',
-      'movie download', 'film download', 'torrent', 'streaming site',
+      'watch online', 'free movies', 'hd movies', 'full movie',
+      'movie', 'film',
+      'movie download', 'film download', 'torrent',
       
       // Entertainment terms (exact matches)
       'entertainment', 'tv shows', 'television', 'series', 'episode',
-      'season', 'watch', 'stream', 'streaming', 'video', 'videos',
+      'season',
       
       // Common movie site patterns (exact matches)
       'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
@@ -927,8 +927,8 @@ class ContentAnalyzer {
     
     // Check text content for movie patterns (with word boundary checking for common terms)
     const textContentHasMovieContent = movieKeywords.some(keyword => {
-      // For common words like "watch", "stream", "video", use word boundary checking
-      const commonWords = ['watch', 'stream', 'streaming', 'video', 'videos', 'movie', 'movies', 'film', 'films'];
+      // For common words like "stream", use word boundary checking
+      const commonWords = ['movies', 'film'];
       if (commonWords.includes(keyword)) {
         return hasWordBoundary(textContent, keyword);
       }
@@ -938,7 +938,7 @@ class ContentAnalyzer {
     
     if (textContentHasMovieContent) {
       const matchedKeyword = movieKeywords.find(k => {
-        const commonWords = ['watch', 'stream', 'streaming', 'video', 'videos', 'movie', 'movies', 'film', 'films'];
+        const commonWords = ['movies', 'film', 'films'];
         if (commonWords.includes(k)) {
           return hasWordBoundary(textContent, k);
         }
@@ -957,7 +957,6 @@ class ContentAnalyzer {
       };
     }
     
-    // Check for video elements that might indicate streaming
     if (contentData.hasVideoElements && (urlHasMovieContent || titleHasMovieContent || descriptionHasMovieContent)) {
       this.log('🚫 VIDEO ELEMENTS WITH MOVIE CONTEXT DETECTED');
       return {
@@ -986,7 +985,7 @@ class ContentAnalyzer {
     const vulgarKeywords = [
       // Explicit vulgar terms (exact matches)
       'fuck', 'shit', 'pussy', 'dick', 'cunt', 'asshole', 'bitch', 'slut',
-      'nigga', 'nigger', 'whore', 'hoe', 'cock', 'penis', 'vagina', 'ass',
+      'nigga', 'nigger', 'whore', 'hoe', 'cock', 'penis', 'vagina',
       
       // Adult content terms (exact matches)
       'porn', 'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn',
@@ -1106,7 +1105,6 @@ class ContentAnalyzer {
       };
     }
     
-    // Check for video elements that might indicate adult content
     if (contentData.hasVideoElements && (urlHasVulgarContent || titleHasVulgarContent || descriptionHasVulgarContent)) {
       this.log('🚫 VIDEO ELEMENTS WITH VULGAR CONTEXT DETECTED');
       return {
