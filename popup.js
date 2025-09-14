@@ -209,6 +209,19 @@ class PopupManager {
       this.debugSession();
     });
 
+    // Extension protection controls
+    document.getElementById('checkExtensionStatus')?.addEventListener('click', () => {
+      this.checkExtensionStatus();
+    });
+
+    document.getElementById('forceReEnable')?.addEventListener('click', () => {
+      this.forceReEnable();
+    });
+
+    document.getElementById('openExtensionsPage')?.addEventListener('click', () => {
+      this.openExtensionsPage();
+    });
+
     // Preset save
     document.getElementById('savePreset').addEventListener('click', () => {
       if (this.settings.focusLock) { this.showNotification('Focus is locked', 'info'); return; }
@@ -927,6 +940,46 @@ class PopupManager {
       // This is a best effort - devtools API is limited
       console.log('🔍 AI Guardian Debug Info - Check the Console tab for detailed logs');
     }
+  }
+
+  // EXTENSION PROTECTION METHODS
+  async checkExtensionStatus() {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'checkExtensionStatus' });
+      
+      if (response.enabled) {
+        this.showNotification('✅ Extension is enabled and running', 'success');
+      } else {
+        this.showNotification('⚠️ Extension is disabled - attempting to re-enable', 'error');
+        await this.forceReEnable();
+      }
+    } catch (error) {
+      console.error('Error checking extension status:', error);
+      this.showNotification('❌ Error checking extension status', 'error');
+    }
+  }
+
+  async forceReEnable() {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'forceReEnable' });
+      
+      if (response.success) {
+        this.showNotification('✅ Extension re-enable attempted', 'success');
+        // Check status again after a moment
+        setTimeout(() => this.checkExtensionStatus(), 2000);
+      } else {
+        this.showNotification('❌ Failed to re-enable extension', 'error');
+      }
+    } catch (error) {
+      console.error('Error forcing re-enable:', error);
+      this.showNotification('❌ Error attempting to re-enable extension', 'error');
+    }
+  }
+
+  openExtensionsPage() {
+    // Open the browser's extensions management page
+    chrome.tabs.create({ url: 'chrome://extensions/' });
+    this.showNotification('Opened extensions page - extension should auto-re-enable if disabled', 'info');
   }
 }
 

@@ -124,6 +124,9 @@ class ProductivityGuardian {
     
     // Check if focus lock should auto-expire
     this.checkFocusLockExpiry();
+    
+    // Initialize extension monitoring to prevent disabling
+    this.initExtensionMonitoring();
   }
 
   checkFocusLockExpiry() {
@@ -186,6 +189,14 @@ class ProductivityGuardian {
         } else if (request.action === 'stopSession') {
           const ok = await this.stopSession?.(request.justification || '');
           sendResponse({ success: ok });
+        } else if (request.action === 'checkExtensionStatus') {
+          // Check if extension is still enabled
+          const extensionInfo = await chrome.management.get(chrome.runtime.id);
+          sendResponse({ enabled: extensionInfo.enabled, id: chrome.runtime.id });
+        } else if (request.action === 'forceReEnable') {
+          // Force re-enable the extension
+          await this.attemptReEnable();
+          sendResponse({ success: true });
         }
       } catch (error) {
         console.error('Error handling message:', error);
@@ -463,7 +474,6 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
       
       // Entertainment terms (exact matches)
       'entertainment', 'tv shows', 'television', 'series', 'episode',
-      'season',
       
       // Common movie site patterns (exact matches)
       'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
@@ -733,6 +743,144 @@ Be strict for productivity - when uncertain, choose BLOCK.`;
     // Check API if key changed
     if (this.groqApiKey !== oldApiKey && this.groqApiKey) {
       await this.checkApiConnection();
+    }
+  }
+
+  // EXTENSION MONITORING - Prevent disabling from browser extensions page
+  async initExtensionMonitoring() {
+    this.log('🛡️ Initializing extension monitoring to prevent disabling');
+    
+    // Set up periodic checks to ensure extension stays enabled
+    this.setupExtensionHealthChecks();
+    
+    // Monitor for extension state changes
+    this.setupExtensionStateMonitoring();
+    
+    // Create a persistent alarm to check extension status
+    chrome.alarms.create('extensionHealthCheck', { 
+      delayInMinutes: 1, 
+      periodInMinutes: 1 
+    });
+    
+    chrome.alarms.onAlarm.addListener(async (alarm) => {
+      if (alarm.name === 'extensionHealthCheck') {
+        await this.checkExtensionHealth();
+      }
+    });
+  }
+
+  async setupExtensionHealthChecks() {
+    // Check extension status every 30 seconds
+    setInterval(async () => {
+      await this.checkExtensionHealth();
+    }, 30000);
+  }
+
+  async setupExtensionStateMonitoring() {
+    // Monitor for management API changes
+    if (chrome.management) {
+      chrome.management.onEnabled.addListener(async (info) => {
+        if (info.id === chrome.runtime.id) {
+          this.log('✅ Extension was re-enabled');
+          await this.ensureExtensionEnabled();
+        }
+      });
+      
+      chrome.management.onDisabled.addListener(async (info) => {
+        if (info.id === chrome.runtime.id) {
+          this.log('🚨 Extension was disabled - attempting to re-enable');
+          await this.attemptReEnable();
+        }
+      });
+    }
+  }
+
+  async checkExtensionHealth() {
+    try {
+      // Check if extension is still enabled
+      const extensionInfo = await chrome.management.get(chrome.runtime.id);
+      
+      if (!extensionInfo.enabled) {
+        this.log('🚨 Extension health check failed - extension is disabled');
+        await this.attemptReEnable();
+      } else {
+        // Extension is enabled, ensure our settings are still active
+        await this.ensureExtensionEnabled();
+      }
+    } catch (error) {
+      this.log('❌ Extension health check error:', error);
+      // If we can't check status, assume we need to re-enable
+      await this.attemptReEnable();
+    }
+  }
+
+  async attemptReEnable() {
+    try {
+      this.log('🔄 Attempting to re-enable extension');
+      
+      // Try to re-enable the extension
+      await chrome.management.setEnabled(chrome.runtime.id, true);
+      
+      // Wait a moment for the change to take effect
+      setTimeout(async () => {
+        await this.ensureExtensionEnabled();
+      }, 2000);
+      
+    } catch (error) {
+      this.log('❌ Failed to re-enable extension:', error);
+      
+      // If we can't re-enable programmatically, try other methods
+      await this.createRecoveryMechanism();
+    }
+  }
+
+  async ensureExtensionEnabled() {
+    try {
+      // Ensure our extension settings are still active
+      if (!this.isEnabled) {
+        this.log('🔄 Re-enabling extension functionality');
+        this.isEnabled = true;
+        await this.updateSettings({});
+      }
+      
+      // Create a backup of our enabled state
+      await chrome.storage.local.set({ 
+        extensionEnabled: true,
+        lastEnabledCheck: Date.now()
+      });
+      
+    } catch (error) {
+      this.log('❌ Error ensuring extension enabled:', error);
+    }
+  }
+
+  async createRecoveryMechanism() {
+    try {
+      this.log('🆘 Creating recovery mechanism');
+      
+      // Store recovery data
+      const recoveryData = {
+        timestamp: Date.now(),
+        extensionId: chrome.runtime.id,
+        version: this.version,
+        enabled: true
+      };
+      
+      // Store in multiple locations for redundancy
+      await chrome.storage.local.set({ 
+        recoveryData: recoveryData,
+        extensionRecovery: recoveryData
+      });
+      
+      // Try to open a recovery page
+      try {
+        await chrome.tabs.create({ 
+          url: chrome.runtime.getURL('dashboard.html') + '?recovery=true'
+        });
+      } catch {}
+      
+    } catch (error) {
+      this.log('❌ Error creating recovery mechanism:', error);
     }
   }
 }

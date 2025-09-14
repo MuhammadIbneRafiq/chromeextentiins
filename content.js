@@ -842,7 +842,6 @@ class ContentAnalyzer {
       
       // Entertainment terms (exact matches)
       'entertainment', 'tv shows', 'television', 'series', 'episode',
-      'season',
       
       // Common movie site patterns (exact matches)
       'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
