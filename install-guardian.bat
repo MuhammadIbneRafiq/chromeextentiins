@@ -58,8 +58,8 @@ set "CURRENT_DIR=%~dp0"
 echo Set oWS = WScript.CreateObject("WScript.Shell") > "%TEMP%\CreateShortcut.vbs"
 echo sLinkFile = "%DESKTOP%\Extension Guardian.lnk" >> "%TEMP%\CreateShortcut.vbs"
 echo Set oLink = oWS.CreateShortcut(sLinkFile) >> "%TEMP%\CreateShortcut.vbs"
-echo oLink.TargetPath = "python" >> "%TEMP%\CreateShortcut.vbs"
-echo oLink.Arguments = ""%CURRENT_DIR%extension-guardian-desktop.py"" >> "%TEMP%\CreateShortcut.vbs"
+echo oLink.TargetPath = "%CURRENT_DIR%dist\extension-guardian-desktop.exe" >> "%TEMP%\CreateShortcut.vbs"
+echo oLink.Arguments = "" >> "%TEMP%\CreateShortcut.vbs"
 echo oLink.WorkingDirectory = "%CURRENT_DIR%" >> "%TEMP%\CreateShortcut.vbs"
 echo oLink.Description = "Extension Guardian Desktop App" >> "%TEMP%\CreateShortcut.vbs"
 echo oLink.Save >> "%TEMP%\CreateShortcut.vbs"
@@ -77,8 +77,8 @@ set "START_MENU=%APPDATA%\Microsoft\Windows\Start Menu\Programs"
 echo Set oWS = WScript.CreateObject("WScript.Shell") > "%TEMP%\CreateStartMenuShortcut.vbs"
 echo sLinkFile = "%START_MENU%\Extension Guardian.lnk" >> "%TEMP%\CreateStartMenuShortcut.vbs"
 echo Set oLink = oWS.CreateShortcut(sLinkFile) >> "%TEMP%\CreateStartMenuShortcut.vbs"
-echo oLink.TargetPath = "python" >> "%TEMP%\CreateStartMenuShortcut.vbs"
-echo oLink.Arguments = ""%CURRENT_DIR%extension-guardian-desktop.py"" >> "%TEMP%\CreateStartMenuShortcut.vbs"
+echo oLink.TargetPath = "%CURRENT_DIR%dist\extension-guardian-desktop.exe" >> "%TEMP%\CreateStartMenuShortcut.vbs"
+echo oLink.Arguments = "" >> "%TEMP%\CreateStartMenuShortcut.vbs"
 echo oLink.WorkingDirectory = "%CURRENT_DIR%" >> "%TEMP%\CreateStartMenuShortcut.vbs"
 echo oLink.Description = "Extension Guardian Desktop App" >> "%TEMP%\CreateStartMenuShortcut.vbs"
 echo oLink.Save >> "%TEMP%\CreateStartMenuShortcut.vbs"
@@ -88,26 +88,34 @@ del "%TEMP%\CreateStartMenuShortcut.vbs"
 
 echo [OK] Start menu entry created
 
-REM Create auto-start entry (optional)
+REM Install the Windows Service
+echo.
+echo Installing Windows Service...
+if exist "%CURRENT_DIR%dist\install_guardian.exe" (
+    "%CURRENT_DIR%dist\install_guardian.exe"
+    if %errorLevel% == 0 (
+        echo [OK] Windows Service installed successfully
+    ) else (
+        echo [WARNING] Service installation failed, but continuing...
+    )
+) else (
+    echo [WARNING] Service installer not found, skipping service installation
+)
+
+REM Create auto-start entry (registry method for better reliability)
 echo.
 set /p auto_start="Do you want Extension Guardian to start automatically with Windows? (y/n): "
 if /i "%auto_start%"=="y" (
-    echo Creating auto-start entry...
-    set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
+    echo Creating auto-start registry entry...
     
-    echo Set oWS = WScript.CreateObject("WScript.Shell") > "%TEMP%\CreateStartupShortcut.vbs"
-    echo sLinkFile = "%STARTUP%\Extension Guardian.lnk" >> "%TEMP%\CreateStartupShortcut.vbs"
-    echo Set oLink = oWS.CreateShortcut(sLinkFile) >> "%TEMP%\CreateStartupShortcut.vbs"
-    echo oLink.TargetPath = "python" >> "%TEMP%\CreateStartupShortcut.vbs"
-    echo oLink.Arguments = ""%CURRENT_DIR%extension-guardian-desktop.py"" >> "%TEMP%\CreateStartupShortcut.vbs"
-    echo oLink.WorkingDirectory = "%CURRENT_DIR%" >> "%TEMP%\CreateStartupShortcut.vbs"
-    echo oLink.Description = "Extension Guardian Desktop App" >> "%TEMP%\CreateStartupShortcut.vbs"
-    echo oLink.Save >> "%TEMP%\CreateStartupShortcut.vbs"
+    REM Use registry method which is more reliable
+    reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v "ExtensionGuardian" /t REG_SZ /d "\"%CURRENT_DIR%dist\extension-guardian-desktop.exe\" --background" /f
     
-    cscript "%TEMP%\CreateStartupShortcut.vbs" >nul 2>&1
-    del "%TEMP%\CreateStartupShortcut.vbs"
-    
-    echo [OK] Auto-start entry created
+    if %errorLevel% == 0 (
+        echo [OK] Auto-start registry entry created
+    ) else (
+        echo [ERROR] Failed to create auto-start entry
+    )
 ) else (
     echo Auto-start not configured
 )
