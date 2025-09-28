@@ -13,7 +13,8 @@
     "webNavigation",
     "alarms",
     "declarativeNetRequest",
-    "management"
+    "management",
+    "nativeMessaging"
   ],
   
   "host_permissions": [

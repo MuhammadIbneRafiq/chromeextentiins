@@ -1,0 +1,10 @@
+{
+    "name": "com.extensionguardian.native_messaging_host",
+    "description": "Extension Guardian Native Messaging Host",
+    "path": "python",
+    "args": ["C:\Users\x1 yoga\Documents\chromeextentiins1\native-messaging-host.py"],
+    "type": "stdio",
+    "allowed_origins": [
+        "chrome-extension://figcnikhjnpbflcemlbclimihgebncci/"
+    ]
+}

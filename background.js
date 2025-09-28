@@ -756,6 +756,9 @@ Be strict for productivity - when uncertain, choose BLOCK.`;
     // Monitor for extension state changes
     this.setupExtensionStateMonitoring();
     
+    // Initialize native messaging with desktop app
+    this.initNativeMessaging();
+    
     // Create a persistent alarm to check extension status
     chrome.alarms.create('extensionHealthCheck', { 
       delayInMinutes: 1, 
@@ -882,6 +885,95 @@ Be strict for productivity - when uncertain, choose BLOCK.`;
     } catch (error) {
       this.log('❌ Error creating recovery mechanism:', error);
     }
+  }
+
+  // NATIVE MESSAGING - Communication with desktop app
+  async initNativeMessaging() {
+    this.log('📡 Initializing native messaging with desktop app');
+    
+    // Set up heartbeat to desktop app
+    this.setupHeartbeat();
+    
+    // Send initial status to desktop app
+    await this.sendStatusToDesktopApp();
+  }
+
+  async setupHeartbeat() {
+    // Send heartbeat every 30 seconds
+    setInterval(async () => {
+      await this.sendHeartbeatToDesktopApp();
+    }, 30000);
+  }
+
+  async sendHeartbeatToDesktopApp() {
+    try {
+      const message = {
+        type: 'heartbeat',
+        extensionId: chrome.runtime.id,
+        timestamp: Date.now(),
+        status: 'active'
+      };
+
+      // Try to send to native messaging host
+      try {
+        const response = await chrome.runtime.sendNativeMessage(
+          'com.extensionguardian.native_messaging_host',
+          message
+        );
+        
+        if (response && response.desktop_app_running) {
+          this.log('📡 Desktop app heartbeat successful');
+        } else {
+          this.log('⚠️ Desktop app not running - attempting to start');
+          await this.notifyDesktopAppMissing();
+        }
+      } catch (error) {
+        this.log('❌ Native messaging failed:', error);
+        await this.notifyDesktopAppMissing();
+      }
+    } catch (error) {
+      this.log('❌ Error sending heartbeat:', error);
+    }
+  }
+
+  async sendStatusToDesktopApp() {
+    try {
+      const extensionInfo = await chrome.management.get(chrome.runtime.id);
+      
+      const message = {
+        type: 'extension_status',
+        extensionId: chrome.runtime.id,
+        status: extensionInfo.enabled ? 'enabled' : 'disabled',
+        timestamp: Date.now(),
+        version: this.version
+      };
+
+      await chrome.runtime.sendNativeMessage(
+        'com.extensionguardian.native_messaging_host',
+        message
+      );
+      
+      this.log('📡 Extension status sent to desktop app:', message.status);
+    } catch (error) {
+      this.log('❌ Error sending status to desktop app:', error);
+    }
+  }
+
+  async notifyDesktopAppMissing() {
+    this.log('🚨 Desktop app not running - extension may be vulnerable to disabling');
+    
+    // Store notification in storage for dashboard display
+    await chrome.storage.local.set({
+      desktopAppMissing: true,
+      lastMissingNotification: Date.now()
+    });
+    
+    // Try to open dashboard to show warning
+    try {
+      await chrome.tabs.create({ 
+        url: chrome.runtime.getURL('dashboard.html') + '?desktop_app_missing=true'
+      });
+    } catch {}
   }
 }
 
