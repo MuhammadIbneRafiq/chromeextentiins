@@ -1,0 +1,3 @@
+@echo off
+echo Starting Extension Guardian in background mode...
+python extension-guardian-desktop.py --background

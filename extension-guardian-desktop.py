@@ -13,11 +13,14 @@ from pathlib import Path
 import logging
 
 class ExtensionGuardian:
-    def __init__(self):
+    def __init__(self, background_mode=False):
         self.root = tk.Tk()
         self.root.title("Extension Guardian")
         self.root.geometry("800x600")
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # Store background mode setting
+        self.background_mode = background_mode
         
         self.config = {
             'extension_id': 'figcnikhjnpbflcemlbclimihgebncci',
@@ -766,21 +769,94 @@ To prevent this:
     
     def on_closing(self):
         if self.protection_active:
-            result = messagebox.askyesno("Protection Active")
+            result = messagebox.askyesno("Protection Active", 
+                                       "Protection is active. Do you want to continue monitoring in the background?")
             if not result:
+                self.is_monitoring = False
+                self.save_config()
+                self.root.destroy()
                 return
         
-        self.save_config()
-        self.root.destroy()
+        # Hide the window instead of destroying it
+        self.root.withdraw()
+        
+        # Create a system tray icon for background monitoring
+        self.create_system_tray()
+        
+        # Continue monitoring in background
         self.continue_background_monitoring()
     
+    def create_system_tray(self):
+        try:
+            # Create a simple tray icon using Windows API
+            import pystray
+            from PIL import Image
+            import io
+            
+            # Create a simple icon
+            img = Image.new('RGB', (64, 64), color='red')
+            
+            menu = pystray.Menu(
+                pystray.MenuItem("Show Window", self.show_window),
+                pystray.MenuItem("Stop Monitoring", self.stop_monitoring),
+                pystray.MenuItem("Exit", self.quit_app)
+            )
+            
+            self.icon = pystray.Icon("Extension Guardian", img, menu=menu)
+            
+            # Start the tray icon in a separate thread
+            threading.Thread(target=self.icon.run, daemon=True).start()
+            
+        except ImportError:
+            # If pystray is not available, just log that we're running in background
+            self.logger.info("Running in background mode (no system tray)")
+        except Exception as e:
+            self.logger.error(f"Error creating system tray: {e}")
+    
+    def show_window(self):
+        """Show the main window"""
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+    
+    def stop_monitoring(self):
+        """Stop monitoring and exit"""
+        self.is_monitoring = False
+        if hasattr(self, 'icon'):
+            self.icon.stop()
+        self.root.quit()
+    
+    def quit_app(self):
+        """Quit the application"""
+        self.is_monitoring = False
+        if hasattr(self, 'icon'):
+            self.icon.stop()
+        self.root.quit()
+    
     def continue_background_monitoring(self):
+        """Continue monitoring in the background"""
         while self.is_monitoring:
-            self.check_browsers_and_extensions()
-            time.sleep(self.config['check_interval_seconds'])
+            try:
+                self.check_browsers_and_extensions()
+                time.sleep(self.config['check_interval_seconds'])
+            except Exception as e:
+                self.logger.error(f"Error in background monitoring: {e}")
+                time.sleep(5)
     
     def run(self):
-        self.root.mainloop()
+        # If background mode is enabled, hide the window and start monitoring
+        if self.background_mode:
+            self.root.withdraw()
+            self.create_system_tray()
+            self.continue_background_monitoring()
+        else:
+            self.root.mainloop()
 
-app = ExtensionGuardian()
-app.run()
+if __name__ == "__main__":
+    import sys
+    
+    # Check for command line arguments
+    background_mode = "--background" in sys.argv or "-b" in sys.argv
+    
+    app = ExtensionGuardian(background_mode=background_mode)
+    app.run()
