@@ -1027,8 +1027,6 @@ Be strict for productivity - when uncertain, choose BLOCK.`;
       desktopAppMissing: true,
       lastMissingNotification: Date.now()
     });
-    
-    // Removed automatic dashboard popup - user can check dashboard manually if needed
   }
 }
 
