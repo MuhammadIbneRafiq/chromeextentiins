@@ -57,7 +57,6 @@ class ExtensionGuardian:
             ]
         )
         self.logger = logging.getLogger(__name__)
-        self.logger.info("Extension Guardian started")
     
     def setup_gui(self):
         notebook = ttk.Notebook(self.root)
@@ -114,6 +113,7 @@ class ExtensionGuardian:
         
         ttk.Button(actions_frame, text="Close All Browsers", command=self.close_all_browsers).pack(side='left', padx=5)
         ttk.Button(actions_frame, text="Open Extension Page", command=self.open_extension_page).pack(side='left', padx=5)
+        ttk.Button(actions_frame, text="Test Extension Check", command=self.test_extension_check).pack(side='left', padx=5)
         ttk.Button(actions_frame, text="View Logs", command=self.view_logs).pack(side='left', padx=5)
     
     def setup_status_tab(self):
@@ -230,6 +230,13 @@ class ExtensionGuardian:
         browsers_found = []
         extension_disabled = False
         
+        # First, check for direct disabled indicators in any browser's storage
+        direct_disabled = self.check_direct_disabled_indicators()
+        if direct_disabled:
+            self.logger.warning("DIRECT DISABLED INDICATORS FOUND - Extension is disabled")
+            extension_disabled = True
+        
+        # Then check running browsers
         for proc in psutil.process_iter(['pid', 'name', 'exe']):
             try:
                 if proc.info['name'].lower() in [b.lower() for b in self.config['browsers']]:
@@ -254,33 +261,211 @@ class ExtensionGuardian:
         if extension_disabled and self.config['browser_close_enabled']:
             self.logger.warning("EXTENSION DISABLED DETECTED - CLOSING BROWSERS")
             self.handle_extension_disabled()
+            
+    def check_direct_disabled_indicators(self):
+        """Check for direct indicators that the extension has been disabled in any browser"""
+        try:
+            # Check common browser paths for disabled indicators
+            browsers_to_check = [
+                {
+                    'name': 'Chrome',
+                    'path': r"%LOCALAPPDATA%\Google\Chrome\User Data\Default"
+                },
+                {
+                    'name': 'Brave',
+                    'path': r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default"
+                },
+                {
+                    'name': 'Edge',
+                    'path': r"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default"
+                }
+            ]
+            
+            extension_id = self.config['extension_id']
+            
+            for browser in browsers_to_check:
+                try:
+                    browser_path = os.path.expandvars(browser['path'])
+                    
+                    # Check 1: Look for direct disabled state file in local storage
+                    local_storage_path = os.path.join(browser_path, "Local Storage", "leveldb")
+                    if os.path.exists(local_storage_path):
+                        # Check for guardian detection files
+                        guardian_file = os.path.join(local_storage_path, "guardianDetectedDisabled")
+                        if os.path.exists(guardian_file):
+                            self.logger.warning(f"Guardian detected extension disabled marker found in {browser['name']}")
+                            return True
+                    
+                    # Check 2: Look in extension storage
+                    ext_storage_path = os.path.join(browser_path, "Storage", "ext", extension_id)
+                    if os.path.exists(ext_storage_path):
+                        disabled_marker = os.path.join(ext_storage_path, "extensionDisabled")
+                        if os.path.exists(disabled_marker):
+                            self.logger.warning(f"Extension disabled marker found in {browser['name']} storage")
+                            return True
+                            
+                    # Check 3: Look for extension state in preferences
+                    prefs_path = os.path.join(browser_path, "Preferences")
+                    if os.path.exists(prefs_path):
+                        try:
+                            with open(prefs_path, 'r', encoding='utf-8') as f:
+                                prefs_data = json.load(f)
+                                
+                            # Check for disabled state in local storage section
+                            local_storage = prefs_data.get('local_storage', {})
+                            if local_storage:
+                                for key, value in local_storage.items():
+                                    if 'extensionDisabled' in key and value:
+                                        self.logger.warning(f"Extension disabled marker found in {browser['name']} preferences")
+                                        return True
+                        except:
+                            pass
+                            
+                except Exception as e:
+                    self.logger.error(f"Error checking {browser['name']} for disabled indicators: {e}")
+                    
+            return False
+        except Exception as e:
+            self.logger.error(f"Error in check_direct_disabled_indicators: {e}")
+            return False
     
     def check_extension_status(self, browser_name):
-        browser_key = browser_name.lower().replace('.exe', '')
+        try:
+            browser_key = browser_name.lower().replace('.exe', '')
 
-        if 'edge' in browser_key:
-            return self.check_edge_extension_status()
-        elif 'brave' in browser_key:
-            return self.check_brave_extension_status()
+            if 'chrome' in browser_key:
+                return self.check_chrome_extension_status()
+            elif 'edge' in browser_key:
+                return self.check_edge_extension_status()
+            elif 'brave' in browser_key:
+                return self.check_brave_extension_status()
+            elif 'firefox' in browser_key:
+                return self.check_firefox_extension_status()
+            else:
+                self.logger.warning(f"Unknown browser: {browser_name}")
+                return True  # Assume enabled for unknown browsers
+        except Exception as e:
+            self.logger.error(f"Error checking extension status for {browser_name}: {e}")
+            return True  # Return True to avoid false positives
+    
+    def check_chrome_extension_status(self):
+        try:
+            extension_id = self.config['extension_id']
+            
+            # FIRST CHECK: Look for direct disabled state indicators in local storage
+            # This is the most reliable method as it's set by our extension code
+            try:
+                chrome_data_path = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data\Default")
+                local_storage_path = os.path.join(chrome_data_path, "Local Storage", "leveldb")
+                
+                # Check if we can find the extensionDisabled flag in any file
+                if os.path.exists(local_storage_path):
+                    # Check for extension's disabled state marker in storage
+                    storage_file = os.path.join(chrome_data_path, "Local Storage", "leveldb", "MANIFEST-000001")
+                    if os.path.exists(storage_file):
+                        # Check if there's a storage file indicating disabled state
+                        guardian_file = os.path.join(chrome_data_path, "Local Storage", "leveldb", "guardianDetectedDisabled")
+                        if os.path.exists(guardian_file):
+                            self.logger.warning(f"Guardian detected extension disabled marker found in Chrome")
+                            return False
+            except Exception as storage_err:
+                self.logger.error(f"Error checking Chrome local storage: {storage_err}")
+            
+            # SECOND CHECK: Look for the extension's folder and preferences
+            chrome_data_path = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data\Default")
+            
+            # Check Local Extension Settings directory
+            ext_settings_path = os.path.join(chrome_data_path, "Local Extension Settings", extension_id)
+            if not os.path.exists(ext_settings_path):
+                self.logger.warning(f"Extension {extension_id} folder not found in Chrome Local Extension Settings")
+                return False
+                
+            self.logger.info(f"Extension {extension_id} folder found in Chrome Local Extension Settings")
+            
+            # Check preferences file for extension data
+            prefs_path = os.path.join(chrome_data_path, "Preferences")
+            if os.path.exists(prefs_path):
+                with open(prefs_path, 'r', encoding='utf-8') as f:
+                    prefs_data = json.load(f)
+                    
+                # Navigate to extensions settings
+                extensions = prefs_data.get('extensions', {}).get('settings', {})
+                if extension_id in extensions:
+                    ext_data = extensions[extension_id]
+                    self.logger.info(f"Extension data found in Chrome: {ext_data}")
+                    
+                    # Check standard Chrome extension state
+                    state = ext_data.get('state', 0)
+                    if state == 0:  # 0 = disabled, 1 = enabled
+                        self.logger.warning(f"Extension {extension_id} is DISABLED in Chrome (state: {state})")
+                        return False
+                    
+                    # Check additional disable indicators
+                    if ext_data.get('blacklist_state', 0) != 0:
+                        self.logger.warning(f"Extension {extension_id} is blacklisted in Chrome")
+                        return False
+                        
+                    if ext_data.get('disable_reasons', 0) != 0:
+                        self.logger.warning(f"Extension {extension_id} has disable_reasons in Chrome")
+                        return False
+                    
+                    if ext_data.get('withholding_permissions', False):
+                        self.logger.warning(f"Extension {extension_id} has withholding_permissions in Chrome")
+                        return False
+                    
+                    # THIRD CHECK: Check for our custom extension state indicators
+                    # These are set by our extension code to indicate disabled state
+                    try:
+                        # Look for extensionDisabled in the extension data
+                        if 'extensionDisabled' in ext_data and ext_data['extensionDisabled']:
+                            self.logger.warning(f"Extension {extension_id} has extensionDisabled flag in Chrome")
+                            return False
+                    except Exception as ext_err:
+                        self.logger.error(f"Error checking Chrome extension data: {ext_err}")
+                    
+                    # If we have the extension data and no disable indicators, assume it's enabled
+                    self.logger.info(f"Extension {extension_id} is ENABLED in Chrome")
+                    return True
+                else:
+                    self.logger.warning(f"Extension {extension_id} not found in Chrome preferences")
+                    return False
+            else:
+                self.logger.warning("Chrome preferences file not found")
+                # If we have a folder but no preferences file, assume it's enabled
+                return True
+                
+        except Exception as e:
+            self.logger.error(f"Error checking Chrome extension status: {e}")
+            # Return True to avoid false positives if we can't check properly
+            return True
+    
+    def check_firefox_extension_status(self):
+        try:
+            # Firefox extensions are more complex to check
+            # For now, just return True (assume enabled)
+            self.logger.info("Firefox extension checking not implemented yet - assuming enabled")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error checking Firefox extension status: {e}")
+            return True
     
     def check_edge_extension_status(self):
         try:
             # Edge extension registry path
-            reg_path = r"SOFTWARE\Microsoft\Edge\User Data\Default\Extensions"
+            reg_path = r"SOFTWARE\Microsoft\Edge\PreferenceMACs\Default\extensions.settings"
             
             # Try to find extension in registry
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path) as key:
                 # Check if our extension ID exists
                 try:
-                    ext_key = winreg.OpenKey(key, self.config['extension_id'])
-                    # Check if extension is enabled (has a version subkey)
-                    try:
-                        winreg.QueryValue(ext_key, "0")
-                        self.logger.info(f"Extension {self.config['extension_id']} found and enabled in Edge")
-                        return True
-                    except FileNotFoundError:
-                        self.logger.warning(f"Extension {self.config['extension_id']} found but disabled in Edge")
-                        return False
+                    # Get the extension value (this is encoded, but if it exists, extension is installed)
+                    extension_value = winreg.QueryValue(key, self.config['extension_id'])
+                    self.logger.info(f"Extension {self.config['extension_id']} found in Edge registry - ENABLED")
+                    
+                    # For now, assume if it exists in registry, it's enabled
+                    # TODO: Decode the value to check actual enabled/disabled state
+                    return True
+                    
                 except FileNotFoundError:
                     self.logger.warning(f"Extension {self.config['extension_id']} NOT found in Edge registry")
                     return False
@@ -290,22 +475,94 @@ class ExtensionGuardian:
             return True
     
     def check_brave_extension_status(self):
-        reg_path = r"SOFTWARE\BraveSoftware\Brave-Browser\User Data\Default\Extensions"
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path) as key:
-            # Check if our extension ID exists
+        try:
+            extension_id = self.config['extension_id']
+            
+            # FIRST CHECK: Look for direct disabled state indicators in local storage
+            # This is the most reliable method as it's set by our extension code
             try:
-                ext_key = winreg.OpenKey(key, self.config['extension_id'])
-                # Check if extension is enabled (has a version subkey)
-                try:
-                    winreg.QueryValue(ext_key, "0")
-                    self.logger.info(f"Extension {self.config['extension_id']} found and enabled in Brave")
-                    return True
-                except FileNotFoundError:
-                    self.logger.warning(f"Extension {self.config['extension_id']} found but disabled in Brave")
-                    return False
-            except FileNotFoundError:
-                self.logger.warning(f"Extension {self.config['extension_id']} NOT found in Brave registry")
+                brave_data_path = os.path.expandvars(r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default")
+                local_storage_path = os.path.join(brave_data_path, "Local Storage", "leveldb")
+                
+                # Check if we can find the extensionDisabled flag in any file
+                if os.path.exists(local_storage_path):
+                    # Check for extension's disabled state marker in storage
+                    storage_file = os.path.join(brave_data_path, "Local Storage", "leveldb", "MANIFEST-000001")
+                    if os.path.exists(storage_file):
+                        # Check if there's a storage file indicating disabled state
+                        # This is a simple check for the guardian detection files
+                        guardian_file = os.path.join(brave_data_path, "Local Storage", "leveldb", "guardianDetectedDisabled")
+                        if os.path.exists(guardian_file):
+                            self.logger.warning(f"Guardian detected extension disabled marker found")
+                            return False
+            except Exception as storage_err:
+                self.logger.error(f"Error checking local storage: {storage_err}")
+            
+            # SECOND CHECK: Look for the extension's folder and preferences
+            brave_data_path = os.path.expandvars(r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default")
+            
+            # Check Local Extension Settings directory
+            ext_settings_path = os.path.join(brave_data_path, "Local Extension Settings", extension_id)
+            if not os.path.exists(ext_settings_path):
+                self.logger.warning(f"Extension {extension_id} folder not found in Brave Local Extension Settings")
                 return False
+                
+            self.logger.info(f"Extension {extension_id} folder found in Brave Local Extension Settings")
+            
+            # Check preferences file for extension data
+            prefs_path = os.path.join(brave_data_path, "Preferences")
+            if os.path.exists(prefs_path):
+                with open(prefs_path, 'r', encoding='utf-8') as f:
+                    prefs_data = json.load(f)
+                    
+                # Navigate to extensions settings
+                extensions = prefs_data.get('extensions', {}).get('settings', {})
+                if extension_id in extensions:
+                    ext_data = extensions[extension_id]
+                    self.logger.info(f"Extension data found: {ext_data}")
+                    
+                    # For developer extensions, we need to check different fields
+                    # Check if extension has been blacklisted
+                    if ext_data.get('blacklist_state', 0) != 0:
+                        self.logger.warning(f"Extension {extension_id} is blacklisted in Brave")
+                        return False
+                        
+                    # Check if extension has disable_reasons
+                    if ext_data.get('disable_reasons', 0) != 0:
+                        self.logger.warning(f"Extension {extension_id} has disable_reasons in Brave")
+                        return False
+                    
+                    # Check if extension has withholding_permissions
+                    if ext_data.get('withholding_permissions', False):
+                        self.logger.warning(f"Extension {extension_id} has withholding_permissions in Brave")
+                        return False
+                    
+                    # THIRD CHECK: Check for our custom extension state indicators
+                    # These are set by our extension code to indicate disabled state
+                    try:
+                        # Look for extensionDisabled in the extension data
+                        if 'extensionDisabled' in ext_data and ext_data['extensionDisabled']:
+                            self.logger.warning(f"Extension {extension_id} has extensionDisabled flag in Brave")
+                            return False
+                    except Exception as ext_err:
+                        self.logger.error(f"Error checking extension data: {ext_err}")
+                    
+                    # If we have the extension data and no disable indicators, assume it's enabled
+                    self.logger.info(f"Extension {extension_id} is ENABLED in Brave")
+                    return True
+                else:
+                    self.logger.warning(f"Extension {extension_id} not found in Brave preferences")
+                    # If we have a folder but no preferences entry, assume it's enabled
+                    # This can happen with developer extensions
+                    return True
+            else:
+                self.logger.warning("Brave preferences file not found")
+                # If we have a folder but no preferences file, assume it's enabled
+                return True
+        except Exception as e:
+            self.logger.error(f"Error checking Brave extension status: {e}")
+            # Return True to avoid false positives if we can't check properly
+            return True
     
     def handle_extension_disabled(self):        
         self.show_extension_disabled_warning()
@@ -313,9 +570,25 @@ class ExtensionGuardian:
     
     def show_extension_disabled_warning(self):
         def show_warning():
-            warning_msg = """oops"""
+            warning_msg = f"""
+EXTENSION GUARDIAN ALERT!
+
+Your extension ({self.config['extension_id']}) has been disabled in one or more browsers.
+
+This could happen if:
+• You manually disabled the extension
+• Browser updated and disabled extensions
+• Extension was removed or corrupted
+
+Action: All browser windows will close in {self.config['warning_countdown_seconds']} seconds to protect your browsing session.
+
+To prevent this:
+1. Re-enable the extension in your browser
+2. Check Extensions page (chrome://extensions/ or brave://extensions/)
+3. Restart Extension Guardian monitoring
+"""
             try:
-                messagebox.showwarning("Extension Disabled", warning_msg)
+                messagebox.showwarning("Extension Guardian - Extension Disabled", warning_msg)
             except:
                 self.logger.warning("Extension disabled - GUI not available for dialog")
         
@@ -401,9 +674,15 @@ class ExtensionGuardian:
             
             # Add browser information
             for browser in browsers:
+                try:
+                    ext_enabled = self.check_extension_status(browser['name'])
+                    ext_status = "ENABLED" if ext_enabled else "DISABLED"
+                except Exception as e:
+                    ext_status = f"ERROR: {str(e)[:30]}..."
+                
                 self.browser_tree.insert('', 'end', 
                                        text=browser['name'],
-                                       values=('Running', browser['pid'], 'Unknown'))
+                                       values=('Running', browser['pid'], ext_status))
         except:
             # GUI is closed, just log the browser status
             for browser in browsers:
@@ -417,6 +696,33 @@ class ExtensionGuardian:
     
     def open_extension_page(self):
         webbrowser.open('chrome://extensions/')
+        
+    def test_extension_check(self):
+        """Test extension checking for all browsers"""
+        test_results = []
+        
+        for browser in self.config['browsers']:
+            browser_name = browser.replace('.exe', '')
+            try:
+                status = self.check_extension_status(browser)
+                status_text = "ENABLED" if status else "DISABLED"
+                test_results.append(f"{browser_name}: {status_text}")
+            except Exception as e:
+                test_results.append(f"{browser_name}: ERROR - {str(e)}")
+        
+        result_text = "Extension Status Test Results:\n\n" + "\n".join(test_results)
+        
+        # Update the extension info text
+        try:
+            self.extension_info_text.delete(1.0, tk.END)
+            self.extension_info_text.insert(1.0, result_text)
+        except:
+            pass
+        
+        # Show in a message box too
+        messagebox.showinfo("Extension Test Results", result_text)
+        
+        self.logger.info("Manual extension check completed")
         
     def view_logs(self):
         log_dir = Path.home() / "ExtensionGuardian" / "logs"

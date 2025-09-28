@@ -166,23 +166,23 @@ class ProductivityGuardian {
         if (request.action === 'analyzeContent') {
           const result = await this.analyzeContentWithAI(request.data);
           sendResponse(result);
-      } else if (request.action === 'updateSettings') {
+        } else if (request.action === 'updateSettings') {
           await this.updateSettings(request.settings);
           sendResponse({ success: true });
         } else if (request.action === 'checkApiStatus') {
           await this.checkApiConnection();
           sendResponse({ working: this.apiWorking, lastCheck: this.lastApiCheck });
         } else if (request.action === 'requestBypass') {
-        const granted = await this.evaluateJustification(request.justification);
-        if (granted && sender?.tab?.url) {
-          try {
-            const host = new URL(sender.tab.url).hostname;
-            await this.setBypass(host, 5);
-          } catch {}
-          sendResponse({ approved: true, minutes: 5 });
-        } else {
-          sendResponse({ approved: false });
-        }
+          const granted = await this.evaluateJustification(request.justification);
+          if (granted && sender?.tab?.url) {
+            try {
+              const host = new URL(sender.tab.url).hostname;
+              await this.setBypass(host, 5);
+            } catch {}
+            sendResponse({ approved: true, minutes: 5 });
+          } else {
+            sendResponse({ approved: false });
+          }
         } else if (request.action === 'startSession') {
           await this.startSession?.(request.session);
           sendResponse({ success: true });
@@ -197,6 +197,45 @@ class ProductivityGuardian {
           // Force re-enable the extension
           await this.attemptReEnable();
           sendResponse({ success: true });
+        } else if (request.action === 'ping') {
+          // Simple ping to check if extension is running
+          this.log('📍 Received ping from extension guardian');
+          
+          // Store ping in storage to track guardian activity
+          try {
+            const pingData = {
+              timestamp: Date.now(),
+              source: sender?.id || 'unknown',
+              url: sender?.url || 'unknown'
+            };
+            
+            const result = await chrome.storage.local.get(['guardianPings']);
+            const pings = result.guardianPings || [];
+            pings.push(pingData);
+            
+            // Keep only last 20 pings
+            if (pings.length > 20) {
+              pings.splice(0, pings.length - 20);
+            }
+            
+            await chrome.storage.local.set({ guardianPings: pings });
+          } catch (e) {
+            this.log('⚠️ Error storing ping data:', e);
+          }
+          
+          sendResponse({ status: 'ok', timestamp: Date.now() });
+        } else if (request.action === 'getDisabledStatus') {
+          // Get current disabled status
+          try {
+            const result = await chrome.storage.local.get(['extensionDisabled', 'disabledTimestamp', 'disabledReason']);
+            sendResponse({
+              disabled: !!result.extensionDisabled,
+              timestamp: result.disabledTimestamp || null,
+              reason: result.disabledReason || 'Unknown'
+            });
+          } catch (e) {
+            sendResponse({ disabled: false, error: e.message });
+          }
         }
       } catch (error) {
         console.error('Error handling message:', error);
@@ -805,10 +844,31 @@ Be strict for productivity - when uncertain, choose BLOCK.`;
       
       if (!extensionInfo.enabled) {
         this.log('🚨 Extension health check failed - extension is disabled');
+        
+        // Store disabled state in storage for detection by other components
+        await chrome.storage.local.set({ 
+          extensionDisabled: true,
+          disabledTimestamp: Date.now(),
+          disabledReason: 'Detected by health check'
+        });
+        
+        // Broadcast disabled state to all tabs
+        this.broadcastToAllTabs({
+          action: 'extensionDisabled',
+          timestamp: Date.now()
+        });
+        
         await this.attemptReEnable();
       } else {
         // Extension is enabled, ensure our settings are still active
         await this.ensureExtensionEnabled();
+        
+        // Clear disabled state if it exists
+        await chrome.storage.local.set({ 
+          extensionDisabled: false,
+          disabledTimestamp: null,
+          disabledReason: null
+        });
       }
     } catch (error) {
       this.log('❌ Extension health check error:', error);
