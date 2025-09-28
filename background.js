@@ -1028,12 +1028,7 @@ Be strict for productivity - when uncertain, choose BLOCK.`;
       lastMissingNotification: Date.now()
     });
     
-    // Try to open dashboard to show warning
-    try {
-      await chrome.tabs.create({ 
-        url: chrome.runtime.getURL('dashboard.html') + '?desktop_app_missing=true'
-      });
-    } catch {}
+    // Removed automatic dashboard popup - user can check dashboard manually if needed
   }
 }
 
