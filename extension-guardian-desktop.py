@@ -806,12 +806,14 @@ To prevent this:
             
             # Start the tray icon in a separate thread
             threading.Thread(target=self.icon.run, daemon=True).start()
+            self.logger.info("System tray icon created successfully")
             
         except ImportError:
             # If pystray is not available, just log that we're running in background
-            self.logger.info("Running in background mode (no system tray)")
+            self.logger.info("Running in background mode (pystray not available - no system tray)")
         except Exception as e:
             self.logger.error(f"Error creating system tray: {e}")
+            self.logger.info("Continuing in background mode without system tray")
     
     def show_window(self):
         """Show the main window"""
@@ -846,9 +848,16 @@ To prevent this:
     def run(self):
         # If background mode is enabled, hide the window and start monitoring
         if self.background_mode:
+            self.logger.info("Starting in background mode")
             self.root.withdraw()
             self.create_system_tray()
-            self.continue_background_monitoring()
+            
+            # Start monitoring in a separate thread so GUI can still process events
+            self.monitoring_thread = threading.Thread(target=self.continue_background_monitoring, daemon=True)
+            self.monitoring_thread.start()
+            
+            # Keep the main thread alive to handle system tray
+            self.root.mainloop()
         else:
             self.root.mainloop()
 
