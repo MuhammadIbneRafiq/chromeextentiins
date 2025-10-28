@@ -1,3 +1,7 @@
+import os
+import json
+import pystray
+from PIL import Image
 import tkinter as tk
 from tkinter import ttk, messagebox
 import psutil
@@ -6,13 +10,13 @@ import threading
 import json
 import os
 import winreg
-import ctypes
 from datetime import datetime, timedelta
 import webbrowser
 from pathlib import Path
 import logging
 
 class ExtensionGuardian:
+    
     def __init__(self, background_mode=False):
         self.root = tk.Tk()
         self.root.title("Extension Guardian")
@@ -23,14 +27,14 @@ class ExtensionGuardian:
         self.background_mode = background_mode
         
         self.config = {
-            'extension_id': 'figcnikhjnpbflcemlbclimihgebncci',
+            'extension_id': 'ljfmjogahnigohdjkknaangiicalhlag',
             'monitoring_enabled': True,
             'browser_close_enabled': True,
             'uninstall_protection_enabled': False,
             'protection_duration_hours': 24,
-            'check_interval_seconds': 5,  # Check every 5 seconds for faster detection
-            'warning_countdown_seconds': 5,
-            'browsers': ['chrome.exe', 'msedge.exe', 'brave.exe', 'firefox.exe']
+            'check_interval_seconds': 10,  # Check every 10 seconds for faster detection
+            'warning_countdown_seconds': 10,
+            'browsers': ['chrome.exe', 'msedge.exe', 'brave.exe', 'comet.exe']
         }
         
         self.is_monitoring = False
@@ -281,6 +285,10 @@ class ExtensionGuardian:
                 {
                     'name': 'Edge',
                     'path': r"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default"
+                },
+                {
+                    'name': 'Comet',
+                    'path': r"%LOCALAPPDATA%\Perplexity\Comet\User Data\Default"
                 }
             ]
             
@@ -342,8 +350,8 @@ class ExtensionGuardian:
                 return self.check_edge_extension_status()
             elif 'brave' in browser_key:
                 return self.check_brave_extension_status()
-            elif 'firefox' in browser_key:
-                return self.check_firefox_extension_status()
+            elif 'comet' in browser_key:
+                return self.check_comet_extension_status()
             else:
                 self.logger.warning(f"Unknown browser: {browser_name}")
                 return True  # Assume enabled for unknown browsers
@@ -442,16 +450,6 @@ class ExtensionGuardian:
             # Return True to avoid false positives if we can't check properly
             return True
     
-    def check_firefox_extension_status(self):
-        try:
-            # Firefox extensions are more complex to check
-            # For now, just return True (assume enabled)
-            self.logger.info("Firefox extension checking not implemented yet - assuming enabled")
-            return True
-        except Exception as e:
-            self.logger.error(f"Error checking Firefox extension status: {e}")
-            return True
-    
     def check_edge_extension_status(self):
         try:
             # Edge extension registry path
@@ -475,6 +473,95 @@ class ExtensionGuardian:
                 
         except Exception as e:
             self.logger.error(f"Error checking Edge extension: {e}")
+            return True
+
+    def check_comet_extension_status(self):
+        try:
+            extension_id = self.config['extension_id']
+            
+            # Comet is Chromium-based, similar to Chrome but with a different path
+            # FIRST CHECK: Look for direct disabled state indicators in local storage
+            try:
+                # Comet browser typically uses this path structure
+                comet_data_path = os.path.expandvars(r"%LOCALAPPDATA%\Perplexity\Comet\User Data\Default")
+                local_storage_path = os.path.join(comet_data_path, "Local Storage", "leveldb")
+                
+                # Check if we can find the extensionDisabled flag in any file
+                if os.path.exists(local_storage_path):
+                    # Check for extension's disabled state marker in storage
+                    storage_file = os.path.join(comet_data_path, "Local Storage", "leveldb", "MANIFEST-000001")
+                    if os.path.exists(storage_file):
+                        # Check if there's a storage file indicating disabled state
+                        guardian_file = os.path.join(comet_data_path, "Local Storage", "leveldb", "guardianDetectedDisabled")
+                        if os.path.exists(guardian_file):
+                            self.logger.warning(f"Guardian detected extension disabled marker found in Comet")
+                            return False
+            except Exception as storage_err:
+                self.logger.error(f"Error checking Comet local storage: {storage_err}")
+            
+            # SECOND CHECK: Look for the extension's folder and preferences        
+            # Check Local Extension Settings directory
+            ext_settings_path = os.path.join(comet_data_path, "Local Extension Settings", extension_id)
+            if not os.path.exists(ext_settings_path):
+                self.logger.warning(f"Extension {extension_id} folder not found in Comet Local Extension Settings")
+                return False
+                
+            self.logger.info(f"Extension {extension_id} folder found in Comet Local Extension Settings")
+            
+            # Check preferences file for extension data
+            prefs_path = os.path.join(comet_data_path, "Preferences")
+            if os.path.exists(prefs_path):
+                with open(prefs_path, 'r', encoding='utf-8') as f:
+                    prefs_data = json.load(f)
+                    
+                # Navigate to extensions settings
+                extensions = prefs_data.get('extensions', {}).get('settings', {})
+                if extension_id in extensions:
+                    ext_data = extensions[extension_id]
+                    self.logger.info(f"Extension data found in Comet: {ext_data}")
+                    
+                    # Check standard Chromium extension state
+                    state = ext_data.get('state', 0)
+                    if state == 0:  # 0 = disabled, 1 = enabled
+                        self.logger.warning(f"Extension {extension_id} is DISABLED in Comet (state: {state})")
+                        return False
+                    
+                    # Check additional disable indicators
+                    if ext_data.get('blacklist_state', 0) != 0:
+                        self.logger.warning(f"Extension {extension_id} is blacklisted in Comet")
+                        return False
+                        
+                    if ext_data.get('disable_reasons', 0) != 0:
+                        self.logger.warning(f"Extension {extension_id} has disable_reasons in Comet")
+                        return False
+                    
+                    if ext_data.get('withholding_permissions', False):
+                        self.logger.warning(f"Extension {extension_id} has withholding_permissions in Comet")
+                        return False
+                    
+                    # Check for our custom extension state indicators
+                    try:
+                        # Look for extensionDisabled in the extension data
+                        if 'extensionDisabled' in ext_data and ext_data['extensionDisabled']:
+                            self.logger.warning(f"Extension {extension_id} has extensionDisabled flag in Comet")
+                            return False
+                    except Exception as ext_err:
+                        self.logger.error(f"Error checking Comet extension data: {ext_err}")
+                    
+                    # If we have the extension data and no disable indicators, assume it's enabled
+                    self.logger.info(f"Extension {extension_id} is ENABLED in Comet")
+                    return True
+                else:
+                    self.logger.warning(f"Extension {extension_id} not found in Comet preferences")
+                    return False
+            else:
+                self.logger.warning("Comet preferences file not found")
+                # If we have a folder but no preferences file, assume it's enabled
+                return True
+                
+        except Exception as e:
+            self.logger.error(f"Error checking Comet extension status: {e}")
+            # Return True to avoid false positives if we can't check properly
             return True
     
     def check_brave_extension_status(self):
@@ -574,14 +661,7 @@ class ExtensionGuardian:
     def show_extension_disabled_warning(self):
         def show_warning():
             warning_msg = f"""
-EXTENSION GUARDIAN ALERT!
-
 Your extension ({self.config['extension_id']}) has been disabled in one or more browsers.
-
-This could happen if:
-• You manually disabled the extension
-• Browser updated and disabled extensions
-• Extension was removed or corrupted
 
 Action: All browser windows will close in {self.config['warning_countdown_seconds']} seconds to protect your browsing session.
 
@@ -788,18 +868,13 @@ To prevent this:
     
     def create_system_tray(self):
         try:
-            # Create a simple tray icon using Windows API
-            import pystray
-            from PIL import Image
-            import io
-            
+            # Create a simple tray icon using Windows API            
             # Create a simple icon
             img = Image.new('RGB', (64, 64), color='red')
             
             menu = pystray.Menu(
-                pystray.MenuItem("Show Window", self.show_window),
-                pystray.MenuItem("Stop Monitoring", self.stop_monitoring),
-                pystray.MenuItem("Exit", self.quit_app)
+                pystray.MenuItem("Show Window", self.show_window)
+                # No exit option - prevent closing from tray
             )
             
             self.icon = pystray.Icon("Extension Guardian", img, menu=menu)
@@ -827,14 +902,7 @@ To prevent this:
         if hasattr(self, 'icon'):
             self.icon.stop()
         self.root.quit()
-    
-    def quit_app(self):
-        """Quit the application"""
-        self.is_monitoring = False
-        if hasattr(self, 'icon'):
-            self.icon.stop()
-        self.root.quit()
-    
+
     def continue_background_monitoring(self):
         """Continue monitoring in the background"""
         while self.is_monitoring:
@@ -864,7 +932,6 @@ To prevent this:
 if __name__ == "__main__":
     import sys
     
-    # Check for command line arguments
     background_mode = "--background" in sys.argv or "-b" in sys.argv
     
     app = ExtensionGuardian(background_mode=background_mode)

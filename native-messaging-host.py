@@ -10,7 +10,6 @@ import struct
 import subprocess
 import psutil
 import time
-import threading
 from pathlib import Path
 
 class NativeMessagingHost:
