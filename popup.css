@@ -67,6 +67,11 @@ h1 {
     box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
 }
 
+.indicator.time-bypass {
+    background: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+}
+
 .toggle-section {
     padding: 20px;
     display: flex;

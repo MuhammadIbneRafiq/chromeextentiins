@@ -594,15 +594,26 @@ class PopupManager {
     const indicator = document.getElementById('statusIndicator');
     const statusText = document.getElementById('statusText');
     
-    if (this.settings.isEnabled) {
+    // Check if current time is between 3 AM and 6 AM
+    const currentHour = new Date().getHours();
+    const isTimeBasedBypass = currentHour >= 3 && currentHour < 6;
+    
+    if (isTimeBasedBypass) {
       indicator.classList.remove('disabled');
+      indicator.classList.add('time-bypass');
+      statusText.textContent = 'Time-Based Bypass (3-6 AM)';
+      console.log('🕒 Time-based bypass active (3-6 AM)');
+    } else if (this.settings.isEnabled) {
+      indicator.classList.remove('disabled');
+      indicator.classList.remove('time-bypass');
       statusText.textContent = 'Protection Active';
     } else {
       indicator.classList.add('disabled');
+      indicator.classList.remove('time-bypass');
       statusText.textContent = 'Protection Disabled';
     }
     
-    console.log('📊 Status Updated:', this.settings.isEnabled ? 'Active' : 'Disabled');
+    console.log('📊 Status Updated:', isTimeBasedBypass ? 'Time-Based Bypass' : (this.settings.isEnabled ? 'Active' : 'Disabled'));
   }
 
   updateBlockedSitesList() {

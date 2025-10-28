@@ -156,6 +156,14 @@ class ProductivityGuardian {
     // Handle messages from content script
     chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       try {
+        // Check if current time is between 3 AM and 6 AM - disable all restrictions
+        const currentHour = new Date().getHours();
+        if (currentHour >= 3 && currentHour < 6) {
+          this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
+          sendResponse({ shouldBlock: false, reason: 'Time-based bypass (3 AM - 6 AM)', bypassExtension: true });
+          return true;
+        }
+        
         // COMPLETELY BYPASS Yuja platform - no extension functionality at all
         if (sender?.tab?.url && sender.tab.url.includes('tue.video.yuja.com')) {
           this.log('🎥 Yuja platform detected in message - completely bypassing extension functionality');
@@ -288,6 +296,13 @@ class ProductivityGuardian {
       this.log('🔍 AI Productivity Guardian - Analyzing URL');
       this.log('📍 URL:', url);
       
+      // Check if current time is between 3 AM and 6 AM - disable all restrictions
+      const currentHour = new Date().getHours();
+      if (currentHour >= 3 && currentHour < 6) {
+        this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
+        return;
+      }
+      
       // COMPLETELY BYPASS Yuja platform - no extension functionality at all
       if (url.includes('tue.video.yuja.com')) {
         this.log('🎥 Yuja platform detected - completely bypassing extension functionality');
@@ -418,6 +433,13 @@ class ProductivityGuardian {
 
   async analyzeUrlWithAI(url, hostname) {
     try {
+      // Check if current time is between 3 AM and 6 AM - disable all restrictions
+      const currentHour = new Date().getHours();
+      if (currentHour >= 3 && currentHour < 6) {
+        this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
+        return false; // Allow the site
+      }
+      
       // NEW: Aggressive movie content detection before AI analysis
       const movieBlockResult = this.checkUrlForMovieContent(url, hostname);
       if (movieBlockResult.shouldBlock) {
@@ -635,6 +657,13 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
   }
 
   async analyzeContentWithAI(contentData) {
+    // Check if current time is between 3 AM and 6 AM - disable all restrictions
+    const currentHour = new Date().getHours();
+    if (currentHour >= 3 && currentHour < 6) {
+      this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
+      return { shouldBlock: false, reason: 'Time-based bypass (3 AM - 6 AM)' };
+    }
+    
     if (!this.groqApiKey) return { shouldBlock: false, reason: 'No API key' };
     if (!this.apiWorking) return { shouldBlock: false, reason: 'API not working' };
 

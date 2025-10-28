@@ -71,10 +71,10 @@ del "%TEMP%\CreateStartMenuShortcut.vbs"
 
 echo [OK] Start menu entry created
 
-REM Step 4: Start Extension Guardian immediately in background mode
+REM Step 4: Start Extension Guardian immediately in background mode (HIDDEN)
 echo.
 echo Starting Extension Guardian in background mode...
-start "" "%CURRENT_DIR%dist\extension-guardian-desktop.exe" --background
+start "" /MIN "%CURRENT_DIR%dist\extension-guardian-desktop.exe" --background
 
 REM Wait a moment for it to start
 timeout /t 2 >nul
@@ -82,9 +82,18 @@ timeout /t 2 >nul
 REM Check if it's running
 tasklist /FI "IMAGENAME eq extension-guardian-desktop.exe" 2>NUL | find /I /N "extension-guardian-desktop.exe" >nul
 if "%ERRORLEVEL%"=="0" (
-    echo [OK] Extension Guardian is now running in background
+    echo [OK] Extension Guardian is now running in background (hidden mode)
 ) else (
     echo [WARNING] Extension Guardian may not have started properly
+)
+
+REM Also start the watchdog if available
+if exist "%CURRENT_DIR%dist\guardian_watchdog.exe" (
+    echo.
+    echo Starting Guardian Watchdog...
+    start "" /MIN "%CURRENT_DIR%dist\guardian_watchdog.exe"
+    timeout /t 1 >nul
+    echo [OK] Watchdog started (ensures guardian stays running)
 )
 
 echo.
