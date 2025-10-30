@@ -77,6 +77,18 @@ echo Building guardian_watchdog.exe from spec...
 python -m PyInstaller --clean --noconfirm guardian_watchdog.spec
 :after_build_watchdog
 
+rem Installer (sets up service and autostart)
+if exist install_guardian_service.spec goto build_installer_spec
+if exist install_guardian_service.py (
+  echo Building install_guardian.exe (default config)...
+  python -m PyInstaller --noconfirm --onefile --name install_guardian install_guardian_service.py
+)
+goto after_build_installer
+:build_installer_spec
+echo Building install_guardian.exe from spec...
+python -m PyInstaller --clean --noconfirm install_guardian_service.spec
+:after_build_installer
+
 echo.
 echo Checking outputs...
 if exist "dist\extension-guardian-desktop.exe" (
@@ -97,10 +109,29 @@ if exist "dist\guardian_watchdog.exe" (
   echo [WARN] guardian_watchdog.exe not found
 )
 
+if exist "dist\install_guardian.exe" (
+  echo [OK] install_guardian.exe created
+) else (
+  echo [WARN] install_guardian.exe not found
+)
+
 if exist "dist\uninstall_guardian.exe" (
   echo [OK] uninstall_guardian.exe created
 ) else (
   echo [INFO] uninstall_guardian.exe not built (optional)
+)
+
+echo.
+echo Installing background components (service, startup) - UAC prompt expected...
+if exist dist\install_guardian.exe (
+  echo Running installer...
+  start /wait "" "%cd%\dist\install_guardian.exe"
+  echo Ensuring service is set to start automatically...
+  sc config ExtensionGuardianService start= auto >nul 2>&1
+  sc start ExtensionGuardianService >nul 2>&1
+  echo [OK] Background service installed and started (if permissions allowed)
+) else (
+  echo [WARN] Installer missing, skipping installation
 )
 
 echo.

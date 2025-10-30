@@ -20,14 +20,14 @@ class ExtensionGuardian:
     VERSION = "2024.12.19-NO-EXIT-v2"
     FORCED_EXTENSION_ID = "ljfmjogahnigohdjkknaangiicalhlag"
     
-    def __init__(self, background_mode=False):
+    def __init__(self, background_mode=True):
         self.root = tk.Tk()
         self.root.title(f"Extension Guardian v{self.VERSION}")
         self.root.geometry("800x600")
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
-        # Store background mode setting
-        self.background_mode = background_mode
+        # Always force background mode; normal mode is disabled
+        self.background_mode = True
         
         self.config = {
             'extension_id': self.FORCED_EXTENSION_ID,
@@ -1073,9 +1073,6 @@ To prevent this:
             self.root.mainloop()
 
 if __name__ == "__main__":
-    import sys
-    
-    background_mode = "--background" in sys.argv or "-b" in sys.argv
-    
-    app = ExtensionGuardian(background_mode=background_mode)
+    # Always run in background mode; normal mode is removed
+    app = ExtensionGuardian(background_mode=True)
     app.run()
