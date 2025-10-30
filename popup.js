@@ -32,7 +32,7 @@ class PopupManager {
     console.log('🚀 Popup Manager Initializing...');
     await this.loadSettings();
     this.setupEventListeners();
-    this.updateUI();
+    await this.updateUI();
     this.loadStats();
     this.loadRecentActivity();
     this.loadDebugLogs();
@@ -85,10 +85,10 @@ class PopupManager {
 
   setupEventListeners() {
     // Enable/disable toggle
-    document.getElementById('enabledToggle').addEventListener('change', (e) => {
+    document.getElementById('enabledToggle').addEventListener('change', async (e) => {
       this.settings.isEnabled = e.target.checked;
       this.saveSettings();
-      this.updateStatusIndicator();
+      await this.updateStatusIndicator();
     });
 
     // Focus toggle
@@ -244,14 +244,14 @@ class PopupManager {
     this.addDynamicEventListeners();
   }
 
-  updateUI() {
+  async updateUI() {
     console.log('🔄 Updating UI with settings:', this.settings);
     
     // Update toggle state
     document.getElementById('enabledToggle').checked = this.settings.isEnabled;
     
     // Update status
-    this.updateStatusIndicator();
+    await this.updateStatusIndicator();
     
     // Update lists
     this.updateBlockedSitesList();
@@ -556,9 +556,9 @@ class PopupManager {
       },
       maxExtraDomains: p.maxExtraDomains || 0,
       durationMin: p.durationMin
-    }}, (res)=>{
+    }}, async (res)=>{
       this.showNotification(`Session started: ${p.name}`, 'success');
-      this.updateUI(); // Refresh the UI to show the new settings
+      await this.updateUI(); // Refresh the UI to show the new settings
     });
   }
 
@@ -590,12 +590,74 @@ class PopupManager {
     });
   }
 
-  updateStatusIndicator() {
+  async getAmsterdamHour() {
+    // Cache in memory to avoid UI lag
+    if (this._amsCache && Date.now() - this._amsCache.ts < 5 * 60 * 1000) {
+      return this._amsCache.hour;
+    }
+
+    const fetchJSON = async (url, timeoutMs = 3500) => {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        return await res.json();
+      } finally {
+        clearTimeout(t);
+      }
+    };
+
+    const providers = [
+      async () => {
+        const j = await fetchJSON('https://timeapi.io/api/Time/current/zone?timeZone=Europe/Amsterdam');
+        if (j && typeof j.hour === 'number') return j.hour;
+        if (j && j.dateTime) return new Date(j.dateTime).getHours();
+        throw new Error('timeapi.io invalid');
+      },
+      async () => {
+        const j = await fetchJSON('https://worldtimeapi.org/api/timezone/Europe/Amsterdam');
+        if (j && j.datetime) return new Date(j.datetime).getHours();
+        if (typeof j.unixtime === 'number') return new Date(j.unixtime * 1000).getUTCHours();
+        throw new Error('worldtimeapi invalid');
+      },
+      async () => {
+        const j = await fetchJSON('https://api.aladhan.com/v1/timingsByCity?city=Amsterdam&country=Netherlands');
+        const ts = j && j.data && j.data.date && (j.data.date.timestamp || j.data.date.gregorian?.timestamp);
+        if (ts) {
+          const d = new Date(parseInt(ts, 10) * 1000);
+          const fmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Europe/Amsterdam' });
+          return parseInt(fmt.format(d), 10);
+        }
+        throw new Error('aladhan invalid');
+      }
+    ];
+
+    for (const p of providers) {
+      try {
+        const hour = await p();
+        this._amsCache = { hour, ts: Date.now() };
+        return hour;
+      } catch (e) {
+        console.log('⏭️ Time provider failed, trying next...', String(e));
+      }
+    }
+
+    try {
+      const now = new Date();
+      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+      const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Amsterdam', hour: '2-digit', hour12: false });
+      return parseInt(fmt.format(new Date(utc)), 10);
+    } catch {
+      return new Date().getHours();
+    }
+  }
+
+  async updateStatusIndicator() {
     const indicator = document.getElementById('statusIndicator');
     const statusText = document.getElementById('statusText');
     
-    // Check if current time is between 3 AM and 6 AM
-    const currentHour = new Date().getHours();
+    // Check if current Amsterdam time is between 3 AM and 6 AM
+    const currentHour = await this.getAmsterdamHour();
     const isTimeBasedBypass = currentHour >= 3 && currentHour < 6;
     
     if (isTimeBasedBypass) {

@@ -66,6 +66,91 @@ class ProductivityGuardian {
     }
   }
 
+  async getAmsterdamHour() {
+    // Cache to avoid frequent network calls (5 minutes)
+    try {
+      const { amsTimeCache } = await chrome.storage.local.get('amsTimeCache');
+      if (amsTimeCache && Date.now() - amsTimeCache.timestamp < 5 * 60 * 1000) {
+        this.log(`🌐 Using cached Amsterdam hour: ${amsTimeCache.hour}`);
+        return amsTimeCache.hour;
+      }
+    } catch {}
+
+    // Helper to fetch with timeout
+    const fetchJSON = async (url, timeoutMs = 3500) => {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        const json = await res.json();
+        return json;
+      } finally {
+        clearTimeout(t);
+      }
+    };
+
+    // Providers (in priority order), each returns hour in 0-23
+    const providers = [
+      {
+        name: 'timeapi.io',
+        fn: async () => {
+          const j = await fetchJSON('https://timeapi.io/api/Time/current/zone?timeZone=Europe/Amsterdam');
+          if (j && typeof j.hour === 'number') return j.hour;
+          if (j && j.dateTime) return new Date(j.dateTime).getHours();
+          throw new Error('invalid response');
+        }
+      },
+      {
+        name: 'worldtimeapi',
+        fn: async () => {
+          const j = await fetchJSON('https://worldtimeapi.org/api/timezone/Europe/Amsterdam');
+          if (j && j.datetime) return new Date(j.datetime).getHours();
+          if (typeof j.unixtime === 'number') return new Date(j.unixtime * 1000).getUTCHours();
+          throw new Error('invalid response');
+        }
+      },
+      {
+        name: 'aladhan',
+        fn: async () => {
+          const j = await fetchJSON('https://api.aladhan.com/v1/timingsByCity?city=Amsterdam&country=Netherlands');
+          const ts = j && j.data && j.data.date && (j.data.date.timestamp || j.data.date.gregorian?.timestamp);
+          if (ts) {
+            const d = new Date(parseInt(ts, 10) * 1000);
+            const fmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Europe/Amsterdam' });
+            return parseInt(fmt.format(d), 10);
+          }
+          throw new Error('invalid response');
+        }
+      }
+    ];
+
+    for (const p of providers) {
+      try {
+        const hour = await p.fn();
+        // Cache result
+        try { await chrome.storage.local.set({ amsTimeCache: { hour, timestamp: Date.now() } }); } catch {}
+        this.log(`🌍 Amsterdam hour from ${p.name}: ${hour}`);
+        return hour;
+      } catch (e) {
+        this.log(`⏭️ Time provider failed (${p.name}), trying next...`, String(e));
+      }
+    }
+
+    // Last resort: derive Amsterdam hour from system UTC (still better than raw local time)
+    try {
+      const now = new Date();
+      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+      // Compute Amsterdam offset using IANA rules via Intl
+      const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Amsterdam', hour: '2-digit', hour12: false });
+      const hour = parseInt(fmt.format(new Date(utc)), 10);
+      this.log(`🕒 Fallback Amsterdam hour via Intl: ${hour}`);
+      return hour;
+    } catch {
+      // Absolute fallback: local hour
+      return new Date().getHours();
+    }
+  }
+
   async evaluateJustification(text) {
     // Lightweight heuristic: require length and study-related intent
     const t = (text || '').toLowerCase();
@@ -156,8 +241,9 @@ class ProductivityGuardian {
     // Handle messages from content script
     chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       try {
-        // Check if current time is between 3 AM and 6 AM - disable all restrictions
-        const currentHour = new Date().getHours();
+        // Check if current Amsterdam time is between 3 AM and 6 AM - disable all restrictions
+        const currentHour = await this.getAmsterdamHour();
+        this.log(`⏱️ Time check (Amsterdam): hour=${currentHour} -> ${currentHour >= 3 && currentHour < 6 ? 'BYPASS' : 'RESTRICT'}`);
         if (currentHour >= 3 && currentHour < 6) {
           this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
           sendResponse({ shouldBlock: false, reason: 'Time-based bypass (3 AM - 6 AM)', bypassExtension: true });
@@ -296,8 +382,9 @@ class ProductivityGuardian {
       this.log('🔍 AI Productivity Guardian - Analyzing URL');
       this.log('📍 URL:', url);
       
-      // Check if current time is between 3 AM and 6 AM - disable all restrictions
-      const currentHour = new Date().getHours();
+      // Check if current Amsterdam time is between 3 AM and 6 AM - disable all restrictions
+      const currentHour = await this.getAmsterdamHour();
+      this.log(`⏱️ Time check (Amsterdam): hour=${currentHour} -> ${currentHour >= 3 && currentHour < 6 ? 'BYPASS' : 'RESTRICT'}`);
       if (currentHour >= 3 && currentHour < 6) {
         this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
         return;
@@ -433,8 +520,9 @@ class ProductivityGuardian {
 
   async analyzeUrlWithAI(url, hostname) {
     try {
-      // Check if current time is between 3 AM and 6 AM - disable all restrictions
-      const currentHour = new Date().getHours();
+      // Check if current Amsterdam time is between 3 AM and 6 AM - disable all restrictions
+      const currentHour = await this.getAmsterdamHour();
+      this.log(`⏱️ Time check (Amsterdam): hour=${currentHour} -> ${currentHour >= 3 && currentHour < 6 ? 'BYPASS' : 'RESTRICT'}`);
       if (currentHour >= 3 && currentHour < 6) {
         this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
         return false; // Allow the site
@@ -657,8 +745,9 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
   }
 
   async analyzeContentWithAI(contentData) {
-    // Check if current time is between 3 AM and 6 AM - disable all restrictions
-    const currentHour = new Date().getHours();
+    // Check if current Amsterdam time is between 3 AM and 6 AM - disable all restrictions
+    const currentHour = await this.getAmsterdamHour();
+    this.log(`⏱️ Time check (Amsterdam): hour=${currentHour} -> ${currentHour >= 3 && currentHour < 6 ? 'BYPASS' : 'RESTRICT'}`);
     if (currentHour >= 3 && currentHour < 6) {
       this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
       return { shouldBlock: false, reason: 'Time-based bypass (3 AM - 6 AM)' };

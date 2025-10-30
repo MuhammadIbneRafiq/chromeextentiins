@@ -5,7 +5,7 @@
 (function() {
   'use strict';
   
-  const EXTENSION_ID = 'ihgblohlcibknaohodhpmonfbegkoafd'; // Your extension ID
+  const EXTENSION_ID = 'ljfmjogahnigohdjkknaangiicalhlag'; // Your extension ID
   const EXTENSION_NAME = 'AI Productivity Guardian';
   const CHECK_INTERVAL = 5000; // Check every 5 seconds
   const RECOVERY_URL = 'chrome://extensions/';

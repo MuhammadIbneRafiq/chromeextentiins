@@ -16,10 +16,13 @@ from pathlib import Path
 import logging
 
 class ExtensionGuardian:
+    # Version identifier - update this to verify new builds
+    VERSION = "2024.12.19-NO-EXIT-v2"
+    FORCED_EXTENSION_ID = "ljfmjogahnigohdjkknaangiicalhlag"
     
     def __init__(self, background_mode=False):
         self.root = tk.Tk()
-        self.root.title("Extension Guardian")
+        self.root.title(f"Extension Guardian v{self.VERSION}")
         self.root.geometry("800x600")
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
@@ -27,13 +30,13 @@ class ExtensionGuardian:
         self.background_mode = background_mode
         
         self.config = {
-            'extension_id': 'ljfmjogahnigohdjkknaangiicalhlag',
+            'extension_id': self.FORCED_EXTENSION_ID,
             'monitoring_enabled': True,
             'browser_close_enabled': True,
             'uninstall_protection_enabled': False,
             'protection_duration_hours': 24,
             'check_interval_seconds': 10,  # Check every 10 seconds for faster detection
-            'warning_countdown_seconds': 10,
+            'warning_countdown_seconds': 15,
             'browsers': ['chrome.exe', 'msedge.exe', 'brave.exe', 'comet.exe']
         }
         
@@ -47,6 +50,14 @@ class ExtensionGuardian:
         self.setup_logging()
         self.setup_gui()
         self.load_config()
+        # Enforce forced ID after loading any saved config
+        self.config['extension_id'] = self.FORCED_EXTENSION_ID
+
+        # Ensure the desktop app starts in background at user logon
+        try:
+            self.ensure_startup_registration()
+        except Exception as e:
+            self.logger.error(f"Failed to register startup: {e}")
         
         if self.config['monitoring_enabled']:
             self.start_monitoring()
@@ -165,7 +176,7 @@ class ExtensionGuardian:
         
         ttk.Label(ext_frame, text="Extension ID:").pack(anchor='w', padx=5, pady=2)
         self.extension_id_var = tk.StringVar(value=self.config['extension_id'])
-        ttk.Entry(ext_frame, textvariable=self.extension_id_var, width=50).pack(fill='x', padx=5, pady=2)
+        ttk.Entry(ext_frame, textvariable=self.extension_id_var, width=50, state='disabled').pack(fill='x', padx=5, pady=2)
         
         browser_frame = ttk.LabelFrame(self.settings_frame, text="Monitored Browsers")
         browser_frame.pack(fill='x', padx=10, pady=5)
@@ -197,8 +208,11 @@ class ExtensionGuardian:
         button_frame.pack(fill='x', padx=5, pady=5)
         
         ttk.Button(button_frame, text="Enable Protection", command=self.enable_protection).pack(side='left', padx=5)
-        ttk.Button(button_frame, text="Disable Protection", command=self.disable_protection).pack(side='left', padx=5)
-        ttk.Button(button_frame, text="Emergency Disable", command=self.emergency_disable).pack(side='left', padx=5)
+        # Create disabled controls for protection disable actions (blocked for security)
+        self.disable_protection_btn = ttk.Button(button_frame, text="Disable Protection", command=self.disable_protection, state='disabled')
+        self.disable_protection_btn.pack(side='left', padx=5)
+        self.emergency_disable_btn = ttk.Button(button_frame, text="Emergency Disable", command=self.emergency_disable, state='disabled')
+        self.emergency_disable_btn.pack(side='left', padx=5)
         
         warning_frame = ttk.LabelFrame(self.protection_frame, text="Warning")
         warning_frame.pack(fill='x', padx=10, pady=5)
@@ -219,10 +233,11 @@ class ExtensionGuardian:
         self.monitoring_thread.start()
             
     def stop_monitoring(self):
-        self.is_monitoring = False
-        self.status_var.set("Stopped")
-        self.start_button.config(state='normal')
-        self.stop_button.config(state='disabled')
+        try:
+            messagebox.showinfo("Action Blocked", "Stopping is disabled for security.")
+        except:
+            self.logger.info("Stop monitoring attempt blocked")
+        return
     
     def monitoring_loop(self):
         while self.is_monitoring:
@@ -236,12 +251,9 @@ class ExtensionGuardian:
     def check_browsers_and_extensions(self):
         browsers_found = []
         extension_disabled = False
-        
-        # First, check for direct disabled indicators in any browser's storage
-        direct_disabled = self.check_direct_disabled_indicators()
-        if direct_disabled:
-            self.logger.warning("DIRECT DISABLED INDICATORS FOUND - Extension is disabled")
-            extension_disabled = True
+        any_check_performed = False
+        any_enabled = False
+        any_disabled = False
         
         # Then check running browsers
         for proc in psutil.process_iter(['pid', 'name', 'exe']):
@@ -254,15 +266,28 @@ class ExtensionGuardian:
                     })
                     
                     extension_enabled = self.check_extension_status(proc.info['name'])
+                    any_check_performed = True
                     if not extension_enabled:
-                        extension_disabled = True
+                        any_disabled = True
                         self.logger.warning(f"EXTENSION DISABLED in {proc.info['name']} (PID: {proc.info['pid']})")
                     else:
+                        any_enabled = True
                         self.logger.info(f"Extension enabled in {proc.info['name']} (PID: {proc.info['pid']})")
                         
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
         
+        # Evaluate direct disabled indicators only as a fallback when no browser checks succeeded
+        # This avoids stale marker files causing false positives.
+        if not any_check_performed:
+            direct_disabled = self.check_direct_disabled_indicators()
+            if direct_disabled:
+                any_disabled = True
+                self.logger.warning("DIRECT DISABLED INDICATORS FOUND (no browser checks) - treating as disabled")
+
+        # Final decision: disabled if any_disabled is True
+        extension_disabled = any_disabled
+
         self.update_browser_status(browsers_found)
         
         if extension_disabled and self.config['browser_close_enabled']:
@@ -405,22 +430,37 @@ class ExtensionGuardian:
                     ext_data = extensions[extension_id]
                     self.logger.info(f"Extension data found in Chrome: {ext_data}")
                     
-                    # Check standard Chrome extension state
+                    # Check standard Chrome extension state with robust fallback
                     state = ext_data.get('state', 0)
-                    if state == 0:  # 0 = disabled, 1 = enabled
-                        self.logger.warning(f"Extension {extension_id} is DISABLED in Chrome (state: {state})")
+
+                    # FIRST: Check if it's an unpacked extension (location=4)
+                    # Unpacked extensions often have state=0 even when enabled
+                    location = ext_data.get('location')
+                    blacklist_state = ext_data.get('blacklist_state', 0)
+                    disable_reasons = ext_data.get('disable_reasons', 0)
+                    withholding_permissions = ext_data.get('withholding_permissions', False)
+
+                    # If it's an unpacked extension with no disable indicators, treat as ENABLED
+                    if location == 4 and blacklist_state == 0 and disable_reasons == 0 and not withholding_permissions:
+                        self.logger.info(f"Extension {extension_id} is UNPACKED (location=4) and active in Chrome - treating as ENABLED")
+                        return True
+
+                    # THEN check explicit state for store-installed extensions
+                    if state == 1:
+                        self.logger.info(f"Extension {extension_id} is ENABLED in Chrome")
+                        return True
+                    if state == 0:
+                        self.logger.warning(f"Extension {extension_id} is DISABLED (state=0) in Chrome")
                         return False
-                    
-                    # Check additional disable indicators
-                    if ext_data.get('blacklist_state', 0) != 0:
+
+                    # Explicit disable indicators
+                    if blacklist_state != 0:
                         self.logger.warning(f"Extension {extension_id} is blacklisted in Chrome")
                         return False
-                        
-                    if ext_data.get('disable_reasons', 0) != 0:
+                    if disable_reasons != 0:
                         self.logger.warning(f"Extension {extension_id} has disable_reasons in Chrome")
                         return False
-                    
-                    if ext_data.get('withholding_permissions', False):
+                    if withholding_permissions:
                         self.logger.warning(f"Extension {extension_id} has withholding_permissions in Chrome")
                         return False
                     
@@ -434,8 +474,8 @@ class ExtensionGuardian:
                     except Exception as ext_err:
                         self.logger.error(f"Error checking Chrome extension data: {ext_err}")
                     
-                    # If we have the extension data and no disable indicators, assume it's enabled
-                    self.logger.info(f"Extension {extension_id} is ENABLED in Chrome")
+                    # If we have extension data and no negatives, assume it's enabled
+                    self.logger.info(f"Extension {extension_id} treated as ENABLED in Chrome (no disable indicators)")
                     return True
                 else:
                     self.logger.warning(f"Extension {extension_id} not found in Chrome preferences")
@@ -452,25 +492,68 @@ class ExtensionGuardian:
     
     def check_edge_extension_status(self):
         try:
-            # Edge extension registry path
-            reg_path = r"SOFTWARE\Microsoft\Edge\PreferenceMACs\Default\extensions.settings"
-            
-            # Try to find extension in registry
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path) as key:
-                # Check if our extension ID exists
-                try:
-                    # Get the extension value (this is encoded, but if it exists, extension is installed)
-                    extension_value = winreg.QueryValue(key, self.config['extension_id'])
-                    self.logger.info(f"Extension {self.config['extension_id']} found in Edge registry - ENABLED")
-                    
-                    # For now, assume if it exists in registry, it's enabled
-                    # TODO: Decode the value to check actual enabled/disabled state
+            extension_id = self.config['extension_id']
+            edge_data_path = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default")
+
+            # Check Local Extension Settings directory
+            ext_settings_path = os.path.join(edge_data_path, "Local Extension Settings", extension_id)
+            if not os.path.exists(ext_settings_path):
+                self.logger.warning(f"Extension {extension_id} folder not found in Edge Local Extension Settings")
+                return False
+
+            self.logger.info(f"Extension {extension_id} folder found in Edge Local Extension Settings")
+
+            # Check preferences file for extension data
+            prefs_path = os.path.join(edge_data_path, "Preferences")
+            if os.path.exists(prefs_path):
+                with open(prefs_path, 'r', encoding='utf-8') as f:
+                    prefs_data = json.load(f)
+
+                extensions = prefs_data.get('extensions', {}).get('settings', {})
+                if extension_id in extensions:
+                    ext_data = extensions[extension_id]
+                    self.logger.info(f"Extension data found in Edge: {ext_data}")
+
+                    state = ext_data.get('state', 0)
+
+                    # FIRST: Check if it's an unpacked extension
+                    location = ext_data.get('location')
+                    blacklist_state = ext_data.get('blacklist_state', 0)
+                    disable_reasons = ext_data.get('disable_reasons', 0)
+                    withholding_permissions = ext_data.get('withholding_permissions', False)
+                    if location == 4 and blacklist_state == 0 and disable_reasons == 0 and not withholding_permissions:
+                        self.logger.info(f"Extension {extension_id} is UNPACKED (location=4) and active in Edge - treating as ENABLED")
+                        return True
+
+                    # THEN check explicit state
+                    if state == 1:
+                        self.logger.info(f"Extension {extension_id} is ENABLED in Edge")
+                        return True
+                    if state == 0:
+                        self.logger.warning(f"Extension {extension_id} is DISABLED (state=0) in Edge")
+                        return False
+
+                    if blacklist_state != 0 or disable_reasons != 0 or withholding_permissions:
+                        self.logger.warning(f"Extension {extension_id} shows disable indicators in Edge")
+                        return False
+
+                    try:
+                        if 'extensionDisabled' in ext_data and ext_data['extensionDisabled']:
+                            self.logger.warning(f"Extension {extension_id} has extensionDisabled flag in Edge")
+                            return False
+                    except Exception as ext_err:
+                        self.logger.error(f"Error checking Edge extension data: {ext_err}")
+
+                    self.logger.info(f"Extension {extension_id} treated as ENABLED in Edge (no disable indicators)")
                     return True
-                    
-                except FileNotFoundError:
-                    self.logger.warning(f"Extension {self.config['extension_id']} NOT found in Edge registry")
+                else:
+                    self.logger.warning(f"Extension {extension_id} not found in Edge preferences")
                     return False
-                
+            else:
+                self.logger.warning("Edge preferences file not found")
+                # If we have a folder but no preferences file, assume it's enabled
+                return True
+
         except Exception as e:
             self.logger.error(f"Error checking Edge extension: {e}")
             return True
@@ -522,21 +605,27 @@ class ExtensionGuardian:
                     
                     # Check standard Chromium extension state
                     state = ext_data.get('state', 0)
-                    if state == 0:  # 0 = disabled, 1 = enabled
-                        self.logger.warning(f"Extension {extension_id} is DISABLED in Comet (state: {state})")
+
+                    # FIRST: Check if it's an unpacked extension
+                    location = ext_data.get('location')
+                    blacklist_state = ext_data.get('blacklist_state', 0)
+                    disable_reasons = ext_data.get('disable_reasons', 0)
+                    withholding_permissions = ext_data.get('withholding_permissions', False)
+                    if location == 4 and blacklist_state == 0 and disable_reasons == 0 and not withholding_permissions:
+                        self.logger.info(f"Extension {extension_id} is UNPACKED (location=4) and active in Comet - treating as ENABLED")
+                        return True
+
+                    # THEN check explicit state
+                    if state == 1:
+                        self.logger.info(f"Extension {extension_id} is ENABLED in Comet")
+                        return True
+                    if state == 0:
+                        self.logger.warning(f"Extension {extension_id} is DISABLED (state=0) in Comet")
                         return False
-                    
+
                     # Check additional disable indicators
-                    if ext_data.get('blacklist_state', 0) != 0:
-                        self.logger.warning(f"Extension {extension_id} is blacklisted in Comet")
-                        return False
-                        
-                    if ext_data.get('disable_reasons', 0) != 0:
-                        self.logger.warning(f"Extension {extension_id} has disable_reasons in Comet")
-                        return False
-                    
-                    if ext_data.get('withholding_permissions', False):
-                        self.logger.warning(f"Extension {extension_id} has withholding_permissions in Comet")
+                    if blacklist_state != 0 or disable_reasons != 0 or withholding_permissions:
+                        self.logger.warning(f"Extension {extension_id} shows disable indicators in Comet")
                         return False
                     
                     # Check for our custom extension state indicators
@@ -548,8 +637,8 @@ class ExtensionGuardian:
                     except Exception as ext_err:
                         self.logger.error(f"Error checking Comet extension data: {ext_err}")
                     
-                    # If we have the extension data and no disable indicators, assume it's enabled
-                    self.logger.info(f"Extension {extension_id} is ENABLED in Comet")
+                    # If we have extension data and no negatives, assume it's enabled
+                    self.logger.info(f"Extension {extension_id} treated as ENABLED in Comet (no disable indicators)")
                     return True
                 else:
                     self.logger.warning(f"Extension {extension_id} not found in Comet preferences")
@@ -611,19 +700,37 @@ class ExtensionGuardian:
                     ext_data = extensions[extension_id]
                     self.logger.info(f"Extension data found: {ext_data}")
                     
-                    # For developer extensions, we need to check different fields
-                    # Check if extension has been blacklisted
-                    if ext_data.get('blacklist_state', 0) != 0:
+                    # Check explicit state if present
+                    brave_state = ext_data.get('state')
+
+                    # FIRST: Check if it's an unpacked extension
+                    location = ext_data.get('location')
+                    blacklist_state = ext_data.get('blacklist_state', 0)
+                    disable_reasons = ext_data.get('disable_reasons', 0)
+                    withholding_permissions = ext_data.get('withholding_permissions', False)
+
+                    # If it's an unpacked extension with no disable indicators, treat as ENABLED
+                    if location == 4 and blacklist_state == 0 and disable_reasons == 0 and not withholding_permissions:
+                        self.logger.info(f"Extension {extension_id} is UNPACKED (location=4) and active in Brave - treating as ENABLED")
+                        return True
+
+                    # THEN check explicit state
+                    if brave_state is not None:
+                        if brave_state == 1:
+                            self.logger.info(f"Extension {extension_id} is ENABLED in Brave (state=1)")
+                            return True
+                        if brave_state == 0:
+                            self.logger.warning(f"Extension {extension_id} is DISABLED in Brave (state=0)")
+                            return False
+
+                    # Check disable indicators (if not unpacked or state not explicitly set)
+                    if blacklist_state != 0:
                         self.logger.warning(f"Extension {extension_id} is blacklisted in Brave")
                         return False
-                        
-                    # Check if extension has disable_reasons
-                    if ext_data.get('disable_reasons', 0) != 0:
+                    if disable_reasons != 0:
                         self.logger.warning(f"Extension {extension_id} has disable_reasons in Brave")
                         return False
-                    
-                    # Check if extension has withholding_permissions
-                    if ext_data.get('withholding_permissions', False):
+                    if withholding_permissions:
                         self.logger.warning(f"Extension {extension_id} has withholding_permissions in Brave")
                         return False
                     
@@ -722,22 +829,18 @@ To prevent this:
         messagebox.showinfo("Protection Enabled", f"Uninstall protection enabled for {duration} hours")
     
     def disable_protection(self):
-        self.protection_active = False
-        self.protection_end_time = None
-        self.protection_status_var.set("Protection Disabled")
-        
-        self.set_uninstall_protection(False)
-        
-        self.logger.info("Uninstall protection disabled")
-        messagebox.showinfo("Protection Disabled", "Uninstall protection has been disabled")
+        try:
+            messagebox.showinfo("Action Blocked", "Disabling protection is disabled for security.")
+        except:
+            self.logger.info("Disable protection attempt blocked")
+        return
     
     def emergency_disable(self):
-        result = messagebox.askyesno("Emergency Disable", 
-                                   "Are you sure you want to emergency disable protection?\n\n"
-                                   "This will immediately remove all protection measures.")
-        if result:
-            self.disable_protection()
-            messagebox.showinfo("Emergency Disabled", "Protection has been emergency disabled")
+        try:
+            messagebox.showinfo("Action Blocked", "Emergency disable is disabled for security.")
+        except:
+            self.logger.info("Emergency disable attempt blocked")
+        return
     
     def set_uninstall_protection(self, enable):
         key_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
@@ -815,7 +918,8 @@ To prevent this:
         self.config['monitoring_enabled'] = self.monitoring_var.get()
         self.config['browser_close_enabled'] = self.browser_close_var.get()
         self.config['check_interval_seconds'] = self.interval_var.get()
-        self.config['extension_id'] = self.extension_id_var.get()
+        # Always enforce the forced extension ID
+        self.config['extension_id'] = self.FORCED_EXTENSION_ID
         self.config['protection_duration_hours'] = self.protection_duration_var.get()
         
         self.save_config()
@@ -828,8 +932,49 @@ To prevent this:
                 with open(config_file, 'r') as f:
                     saved_config = json.load(f)
                     self.config.update(saved_config)
+            # Enforce up-to-date defaults regardless of stale saved config
+            # Always keep monitoring enabled and browser-close protection on
+            self.config['monitoring_enabled'] = True
+            self.config['browser_close_enabled'] = True
+            # Enforce the supported Chromium browsers only (remove Firefox etc.)
+            self.config['browsers'] = ['chrome.exe', 'msedge.exe', 'brave.exe', 'comet.exe']
+            # Ensure countdown is at least 15 seconds as required
+            try:
+                if int(self.config.get('warning_countdown_seconds', 15)) < 15:
+                    self.config['warning_countdown_seconds'] = 15
+            except Exception:
+                self.config['warning_countdown_seconds'] = 15
+            # Always enforce the forced extension ID regardless of saved config
+            self.config['extension_id'] = self.FORCED_EXTENSION_ID
         except Exception as e:
             self.logger.error(f"Error loading config: {e}")
+
+    def ensure_startup_registration(self):
+        """Register the desktop app to start in background on user logon."""
+        try:
+            import sys
+            run_key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            value_name = "ExtensionGuardianDesktop"
+
+            # Resolve path to the executable (PyInstaller) or fallback to script path
+            if getattr(sys, 'frozen', False):
+                exe_path = sys.executable
+            else:
+                # Prefer built EXE in dist if present; otherwise, use python launcher for script
+                dist_exe = Path(__file__).with_name('dist').joinpath('extension-guardian-desktop.exe')
+                if dist_exe.exists():
+                    exe_path = str(dist_exe)
+                else:
+                    exe_path = f"{sys.executable} \"{Path(__file__).resolve()}\""
+
+            command = f'"{exe_path}" --background'
+
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_key_path, 0, winreg.KEY_SET_VALUE) as key:
+                winreg.SetValueEx(key, value_name, 0, winreg.REG_SZ, command)
+            self.logger.info("Startup registration ensured (HKCU Run)")
+        except Exception as e:
+            # Log and continue; startup registration is best-effort
+            self.logger.error(f"Startup registration failed: {e}")
     
     def save_config(self):
         config_dir = Path.home() / "ExtensionGuardian"
@@ -848,23 +993,20 @@ To prevent this:
                 self.stop_monitoring()
     
     def on_closing(self):
-        if self.protection_active:
-            result = messagebox.askyesno("Protection Active", 
-                                       "Protection is active. Do you want to continue monitoring in the background?")
-            if not result:
-                self.is_monitoring = False
-                self.save_config()
-                self.root.destroy()
-                return
-        
+        """Prevent closing - always hide to tray instead"""
+        self.logger.info("Window close attempt - hiding to tray (no exit allowed)")
         # Hide the window instead of destroying it
         self.root.withdraw()
         
         # Create a system tray icon for background monitoring
-        self.create_system_tray()
+        if not hasattr(self, 'icon'):
+            self.create_system_tray()
         
         # Continue monitoring in background
-        self.continue_background_monitoring()
+        if not self.is_monitoring:
+            self.is_monitoring = True
+            self.monitoring_thread = threading.Thread(target=self.continue_background_monitoring, daemon=True)
+            self.monitoring_thread.start()
     
     def create_system_tray(self):
         try:
@@ -897,11 +1039,12 @@ To prevent this:
         self.root.focus_force()
     
     def stop_monitoring(self):
-        """Stop monitoring and exit"""
-        self.is_monitoring = False
-        if hasattr(self, 'icon'):
-            self.icon.stop()
-        self.root.quit()
+        """Stop monitoring is blocked for security"""
+        try:
+            messagebox.showinfo("Action Blocked", "Stopping is disabled for security.")
+        except:
+            self.logger.info("Stop monitoring attempt blocked")
+        return
 
     def continue_background_monitoring(self):
         """Continue monitoring in the background"""
