@@ -46,6 +46,25 @@ def _get_logger(maybe_logger=None):
         return maybe_logger
     return logging.getLogger('browser_blocker')
 
+def _run_hidden(cmd, **kwargs):
+    """Run subprocess without flashing a console window on Windows."""
+    try:
+        creationflags = kwargs.pop('creationflags', 0)
+        # CREATE_NO_WINDOW
+        creationflags |= 0x08000000
+        kwargs['creationflags'] = creationflags
+        if os.name == 'nt':
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = 0
+            kwargs['startupinfo'] = si
+        return subprocess.run(cmd, **kwargs)
+    except Exception as e:
+        try:
+            return subprocess.CompletedProcess(cmd, returncode=1)
+        except Exception:
+            raise e
+
 def _is_incognito_allowed(ext_settings_obj):
     """Best-effort parse for Chromium incognito allowance.
     Different Chromium builds store this flag slightly differently. We treat any
@@ -185,9 +204,9 @@ def block_exe_firewall(exe_path, logger=None):
         return False
     rule_name = f"ExtensionGuardian_Block_{os.path.basename(exe_path)}"
     try:
-        subprocess.run(["netsh", "advfirewall", "firewall", "delete", "rule", f"name={rule_name}"], capture_output=True)
-        subprocess.run(["netsh", "advfirewall", "firewall", "add", "rule", f"name={rule_name}", "dir=out", "action=block", f"program={exe_path}", "enable=yes"], check=False, capture_output=True)
-        subprocess.run(["netsh", "advfirewall", "firewall", "add", "rule", f"name={rule_name}", "dir=in", "action=block", f"program={exe_path}", "enable=yes"], check=False, capture_output=True)
+        _run_hidden(["netsh", "advfirewall", "firewall", "delete", "rule", f"name={rule_name}"], capture_output=True)
+        _run_hidden(["netsh", "advfirewall", "firewall", "add", "rule", f"name={rule_name}", "dir=out", "action=block", f"program={exe_path}", "enable=yes"], check=False, capture_output=True)
+        _run_hidden(["netsh", "advfirewall", "firewall", "add", "rule", f"name={rule_name}", "dir=in", "action=block", f"program={exe_path}", "enable=yes"], check=False, capture_output=True)
         logger.info(f"Firewall block ensured for {exe_path}")
         return True
     except Exception as e:
@@ -198,46 +217,27 @@ def kill_processes_for_exe(exe_path, logger=None):
     logger = _get_logger(logger)
     killed = 0
     try:
-        image_name = os.path.basename(exe_path)
+        image_name = os.path.basename(exe_path).lower()
         logger.debug(f"Attempting to kill processes for image: {image_name}")
-        # Fast path: kill by image name
-        try:
-            tk = subprocess.run(
-                ['taskkill', '/IM', image_name, '/F'],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=1
-            )
-            # taskkill exits 0 if at least one process killed
-            if tk.returncode == 0:
-                # We cannot know exact count without parsing stdout; assume >=1
-                killed += 1
-            else:
-                logger.debug(f"taskkill returned code {tk.returncode} for {image_name}")
-        except subprocess.TimeoutExpired:
-            logger.debug(f"taskkill timeout for {image_name}")
+        target_base = os.path.splitext(image_name)[0]
 
-        # Fallback: PowerShell Get-Process by name (lighter than CIM)
-        if killed == 0:
-            ps_cmd = [
-                'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
-                f"$p=Get-Process -Name '{os.path.splitext(image_name)[0]}' -ErrorAction SilentlyContinue; if($p){{$p|Stop-Process -Force -PassThru|Select-Object -Expand Id|ConvertTo-Json -Compress}}"
-            ]
+        for proc in psutil.process_iter(['pid', 'name']):
             try:
-                proc = subprocess.run(ps_cmd, capture_output=True, text=True, timeout=3)
-                if proc.returncode == 0 and proc.stdout:
+                pname = (proc.info.get('name') or '').lower()
+                if not pname:
+                    continue
+                if pname == image_name or os.path.splitext(pname)[0] == target_base:
                     try:
-                        data = json.loads(proc.stdout)
-                        if isinstance(data, list):
-                            killed += len(data)
-                        elif isinstance(data, int):
-                            killed += 1
-                    except Exception:
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=0.5)
+                        except psutil.TimeoutExpired:
+                            proc.kill()
+                        killed += 1
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
-                else:
-                    logger.debug(f"PowerShell Stop-Process returned code {proc.returncode} for {image_name}; stdout='{(proc.stdout or '').strip()[:120]}'")
-            except subprocess.TimeoutExpired:
-                logger.debug(f"PowerShell Stop-Process timeout for {image_name}")
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
 
         if killed:
             logger.info(f"Terminated {killed} process(es) for {exe_path}")
