@@ -681,402 +681,86 @@ class ExtensionGuardian:
     def check_chrome_extension_status(self):
         try:
             extension_id = self.config['extension_id']
-            
-            # FIRST CHECK: Look for direct disabled state indicators in local storage
-            # This is the most reliable method as it's set by our extension code
-            try:
-                chrome_data_path = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data\Default")
-                local_storage_path = os.path.join(chrome_data_path, "Local Storage", "leveldb")
-                
-                # Check if we can find the extensionDisabled flag in any file
-                if os.path.exists(local_storage_path):
-                    # Check for extension's disabled state marker in storage
-                    storage_file = os.path.join(chrome_data_path, "Local Storage", "leveldb", "MANIFEST-000001")
-                    if os.path.exists(storage_file):
-                        # Check if there's a storage file indicating disabled state
-                        guardian_file = os.path.join(chrome_data_path, "Local Storage", "leveldb", "guardianDetectedDisabled")
-                        if os.path.exists(guardian_file):
-                            self.logger.warning(f"Guardian detected extension disabled marker found in Chrome")
-                            return False
-            except Exception as storage_err:
-                self.logger.error(f"Error checking Chrome local storage: {storage_err}")
-            
-            # SECOND CHECK: Look for the extension's folder and preferences
             chrome_data_path = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data\Default")
-            
-            # Check Local Extension Settings directory
-            ext_settings_path = os.path.join(chrome_data_path, "Local Extension Settings", extension_id)
-            if not os.path.exists(ext_settings_path):
-                self.logger.warning(f"Extension {extension_id} folder not found in Chrome Local Extension Settings")
-                return False
-                
-            self.logger.info(f"Extension {extension_id} folder found in Chrome Local Extension Settings")
-            
-            # Check preferences file for extension data
             prefs_path = os.path.join(chrome_data_path, "Preferences")
-            if os.path.exists(prefs_path):
-                with open(prefs_path, 'r', encoding='utf-8') as f:
-                    prefs_data = json.load(f)
-                    
-                # Navigate to extensions settings
-                extensions = prefs_data.get('extensions', {}).get('settings', {})
-                if extension_id in extensions:
-                    ext_data = extensions[extension_id]
-                    self.logger.info(f"Extension data found in Chrome: {ext_data}")
-                    
-                    # Check standard Chrome extension state with robust fallback
-                    state = ext_data.get('state', 0)
-
-                    # FIRST: Check if it's an unpacked extension (location=4)
-                    # Unpacked extensions often have state=0 even when enabled
-                    location = ext_data.get('location')
-                    blacklist_state = ext_data.get('blacklist_state', 0)
-                    disable_reasons = ext_data.get('disable_reasons', 0)
-                    withholding_permissions = ext_data.get('withholding_permissions', False)
-
-                    # If it's an unpacked extension with no disable indicators, treat as ENABLED
-                    if location == 4 and blacklist_state == 0 and disable_reasons == 0 and not withholding_permissions:
-                        self.logger.info(f"Extension {extension_id} is UNPACKED (location=4) and active in Chrome - treating as ENABLED")
-                        return True
-
-                    # THEN check explicit state for store-installed extensions
-                    if state == 1:
-                        self.logger.info(f"Extension {extension_id} is ENABLED in Chrome")
-                        # Verify incognito allowance
-                        if not _is_incognito_allowed(ext_data):
-                            self.logger.warning(f"Extension {extension_id} is not allowed in incognito in Chrome")
-                            return False
-                        return True
-                    if state == 0:
-                        self.logger.warning(f"Extension {extension_id} is DISABLED (state=0) in Chrome")
-                        return False
-
-                    # Explicit disable indicators
-                    if blacklist_state != 0:
-                        self.logger.warning(f"Extension {extension_id} is blacklisted in Chrome")
-                        return False
-                    if disable_reasons != 0:
-                        self.logger.warning(f"Extension {extension_id} has disable_reasons in Chrome")
-                        return False
-                    if withholding_permissions:
-                        self.logger.warning(f"Extension {extension_id} has withholding_permissions in Chrome")
-                        return False
-                    
-                    # THIRD CHECK: Check for our custom extension state indicators
-                    # These are set by our extension code to indicate disabled state
-                    try:
-                        # Look for extensionDisabled in the extension data
-                        if 'extensionDisabled' in ext_data and ext_data['extensionDisabled']:
-                            self.logger.warning(f"Extension {extension_id} has extensionDisabled flag in Chrome")
-                            return False
-                    except Exception as ext_err:
-                        self.logger.error(f"Error checking Chrome extension data: {ext_err}")
-                    
-                    # If we have extension data and no negatives, ensure incognito is allowed
-                    if not _is_incognito_allowed(ext_data):
-                        self.logger.warning(f"Extension {extension_id} appears enabled but not allowed in incognito in Chrome")
-                        return False
-                    self.logger.info(f"Extension {extension_id} treated as ENABLED in Chrome (incognito allowed)")
-                    return True
-                else:
-                    self.logger.warning(f"Extension {extension_id} not found in Chrome preferences")
-                    return False
-            else:
+            if not os.path.exists(prefs_path):
                 self.logger.warning("Chrome preferences file not found")
-                # If we have a folder but no preferences file, assume it's enabled
-                return True
-                
+                return False
+            with open(prefs_path, 'r', encoding='utf-8') as f:
+                prefs_data = json.load(f)
+            ext_data = prefs_data.get('extensions', {}).get('settings', {}).get(extension_id)
+            if not ext_data:
+                self.logger.warning(f"Extension {extension_id} not found in Chrome preferences")
+                return False
+            allowed = _is_incognito_allowed(ext_data)
+            self.logger.info(f"Chrome incognito allowed={allowed}")
+            return bool(allowed)
         except Exception as e:
             self.logger.error(f"Error checking Chrome extension status: {e}")
-            # Return True to avoid false positives if we can't check properly
-            return True
+            return False
     
     def check_edge_extension_status(self):
         try:
             extension_id = self.config['extension_id']
             edge_data_path = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default")
-
-            # Check Local Extension Settings directory
-            ext_settings_path = os.path.join(edge_data_path, "Local Extension Settings", extension_id)
-            if not os.path.exists(ext_settings_path):
-                self.logger.warning(f"Extension {extension_id} folder not found in Edge Local Extension Settings")
-                return False
-
-            self.logger.info(f"Extension {extension_id} folder found in Edge Local Extension Settings")
-
-            # Check preferences file for extension data
             prefs_path = os.path.join(edge_data_path, "Preferences")
-            if os.path.exists(prefs_path):
-                with open(prefs_path, 'r', encoding='utf-8') as f:
-                    prefs_data = json.load(f)
-
-                extensions = prefs_data.get('extensions', {}).get('settings', {})
-                if extension_id in extensions:
-                    ext_data = extensions[extension_id]
-                    self.logger.info(f"Extension data found in Edge: {ext_data}")
-
-                    state = ext_data.get('state', 0)
-
-                    # FIRST: Check if it's an unpacked extension
-                    location = ext_data.get('location')
-                    blacklist_state = ext_data.get('blacklist_state', 0)
-                    disable_reasons = ext_data.get('disable_reasons', 0)
-                    withholding_permissions = ext_data.get('withholding_permissions', False)
-                    if location == 4 and blacklist_state == 0 and disable_reasons == 0 and not withholding_permissions:
-                        self.logger.info(f"Extension {extension_id} is UNPACKED (location=4) and active in Edge - treating as ENABLED")
-                        return True
-
-                    # THEN check explicit state
-                    if state == 1:
-                        self.logger.info(f"Extension {extension_id} is ENABLED in Edge")
-                        if not _is_incognito_allowed(ext_data):
-                            self.logger.warning(f"Extension {extension_id} is not allowed in InPrivate in Edge")
-                            return False
-                        return True
-                    if state == 0:
-                        self.logger.warning(f"Extension {extension_id} is DISABLED (state=0) in Edge")
-                        return False
-
-                    if blacklist_state != 0 or disable_reasons != 0 or withholding_permissions:
-                        self.logger.warning(f"Extension {extension_id} shows disable indicators in Edge")
-                        return False
-
-                    try:
-                        if 'extensionDisabled' in ext_data and ext_data['extensionDisabled']:
-                            self.logger.warning(f"Extension {extension_id} has extensionDisabled flag in Edge")
-                            return False
-                    except Exception as ext_err:
-                        self.logger.error(f"Error checking Edge extension data: {ext_err}")
-
-                    if not _is_incognito_allowed(ext_data):
-                        self.logger.warning(f"Extension {extension_id} appears enabled but not allowed in InPrivate in Edge")
-                        return False
-                    self.logger.info(f"Extension {extension_id} treated as ENABLED in Edge (InPrivate allowed)")
-                    return True
-                else:
-                    self.logger.warning(f"Extension {extension_id} not found in Edge preferences")
-                    return False
-            else:
+            if not os.path.exists(prefs_path):
                 self.logger.warning("Edge preferences file not found")
-                # If we have a folder but no preferences file, assume it's enabled
-                return True
-
+                return False
+            with open(prefs_path, 'r', encoding='utf-8') as f:
+                prefs_data = json.load(f)
+            ext_data = prefs_data.get('extensions', {}).get('settings', {}).get(extension_id)
+            if not ext_data:
+                self.logger.warning(f"Extension {extension_id} not found in Edge preferences")
+                return False
+            allowed = _is_incognito_allowed(ext_data)
+            self.logger.info(f"Edge InPrivate allowed={allowed}")
+            return bool(allowed)
         except Exception as e:
             self.logger.error(f"Error checking Edge extension: {e}")
-            return True
+            return False
 
     def check_comet_extension_status(self):
         try:
             extension_id = self.config['extension_id']
-            
-            # Comet is Chromium-based, similar to Chrome but with a different path
-            # FIRST CHECK: Look for direct disabled state indicators in local storage
-            try:
-                # Comet browser typically uses this path structure
-                comet_data_path = os.path.expandvars(r"%LOCALAPPDATA%\Perplexity\Comet\User Data\Default")
-                local_storage_path = os.path.join(comet_data_path, "Local Storage", "leveldb")
-                
-                # Check if we can find the extensionDisabled flag in any file
-                if os.path.exists(local_storage_path):
-                    # Check for extension's disabled state marker in storage
-                    storage_file = os.path.join(comet_data_path, "Local Storage", "leveldb", "MANIFEST-000001")
-                    if os.path.exists(storage_file):
-                        # Check if there's a storage file indicating disabled state
-                        guardian_file = os.path.join(comet_data_path, "Local Storage", "leveldb", "guardianDetectedDisabled")
-                        if os.path.exists(guardian_file):
-                            self.logger.warning(f"Guardian detected extension disabled marker found in Comet")
-                            return False
-            except Exception as storage_err:
-                self.logger.error(f"Error checking Comet local storage: {storage_err}")
-            
-            # SECOND CHECK: Look for the extension's folder and preferences        
-            # Check Local Extension Settings directory
-            ext_settings_path = os.path.join(comet_data_path, "Local Extension Settings", extension_id)
-            if not os.path.exists(ext_settings_path):
-                self.logger.warning(f"Extension {extension_id} folder not found in Comet Local Extension Settings")
-                return False
-                
-            self.logger.info(f"Extension {extension_id} folder found in Comet Local Extension Settings")
-            
-            # Check preferences file for extension data
+            comet_data_path = os.path.expandvars(r"%LOCALAPPDATA%\Perplexity\Comet\User Data\Default")
             prefs_path = os.path.join(comet_data_path, "Preferences")
-            if os.path.exists(prefs_path):
-                with open(prefs_path, 'r', encoding='utf-8') as f:
-                    prefs_data = json.load(f)
-                    
-                # Navigate to extensions settings
-                extensions = prefs_data.get('extensions', {}).get('settings', {})
-                if extension_id in extensions:
-                    ext_data = extensions[extension_id]
-                    self.logger.info(f"Extension data found in Comet: {ext_data}")
-                    
-                    # Check standard Chromium extension state
-                    state = ext_data.get('state', 0)
-
-                    # FIRST: Check if it's an unpacked extension
-                    location = ext_data.get('location')
-                    blacklist_state = ext_data.get('blacklist_state', 0)
-                    disable_reasons = ext_data.get('disable_reasons', 0)
-                    withholding_permissions = ext_data.get('withholding_permissions', False)
-                    if location == 4 and blacklist_state == 0 and disable_reasons == 0 and not withholding_permissions:
-                        self.logger.info(f"Extension {extension_id} is UNPACKED (location=4) and active in Comet - treating as ENABLED")
-                        return True
-
-                    # THEN check explicit state
-                    if state == 1:
-                        self.logger.info(f"Extension {extension_id} is ENABLED in Comet")
-                        if not _is_incognito_allowed(ext_data):
-                            self.logger.warning(f"Extension {extension_id} is not allowed in incognito in Comet")
-                            return False
-                        return True
-                    if state == 0:
-                        self.logger.warning(f"Extension {extension_id} is DISABLED (state=0) in Comet")
-                        return False
-
-                    # Check additional disable indicators
-                    if blacklist_state != 0 or disable_reasons != 0 or withholding_permissions:
-                        self.logger.warning(f"Extension {extension_id} shows disable indicators in Comet")
-                        return False
-                    
-                    # Check for our custom extension state indicators
-                    try:
-                        # Look for extensionDisabled in the extension data
-                        if 'extensionDisabled' in ext_data and ext_data['extensionDisabled']:
-                            self.logger.warning(f"Extension {extension_id} has extensionDisabled flag in Comet")
-                            return False
-                    except Exception as ext_err:
-                        self.logger.error(f"Error checking Comet extension data: {ext_err}")
-                    
-                    if not _is_incognito_allowed(ext_data):
-                        self.logger.warning(f"Extension {extension_id} appears enabled but not allowed in incognito in Comet")
-                        return False
-                    self.logger.info(f"Extension {extension_id} treated as ENABLED in Comet (incognito allowed)")
-                    return True
-                else:
-                    self.logger.warning(f"Extension {extension_id} not found in Comet preferences")
-                    return False
-            else:
+            if not os.path.exists(prefs_path):
                 self.logger.warning("Comet preferences file not found")
-                # If we have a folder but no preferences file, assume it's enabled
-                return True
-                
+                return False
+            with open(prefs_path, 'r', encoding='utf-8') as f:
+                prefs_data = json.load(f)
+            ext_data = prefs_data.get('extensions', {}).get('settings', {}).get(extension_id)
+            if not ext_data:
+                self.logger.warning(f"Extension {extension_id} not found in Comet preferences")
+                return False
+            allowed = _is_incognito_allowed(ext_data)
+            self.logger.info(f"Comet incognito allowed={allowed}")
+            return bool(allowed)
         except Exception as e:
             self.logger.error(f"Error checking Comet extension status: {e}")
-            # Return True to avoid false positives if we can't check properly
-            return True
+            return False
     
     def check_brave_extension_status(self):
         try:
             extension_id = self.config['extension_id']
-            
-            # FIRST CHECK: Look for direct disabled state indicators in local storage
-            # This is the most reliable method as it's set by our extension code
-            try:
-                brave_data_path = os.path.expandvars(r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default")
-                local_storage_path = os.path.join(brave_data_path, "Local Storage", "leveldb")
-                
-                # Check if we can find the extensionDisabled flag in any file
-                if os.path.exists(local_storage_path):
-                    # Check for extension's disabled state marker in storage
-                    storage_file = os.path.join(brave_data_path, "Local Storage", "leveldb", "MANIFEST-000001")
-                    if os.path.exists(storage_file):
-                        # Check if there's a storage file indicating disabled state
-                        # This is a simple check for the guardian detection files
-                        guardian_file = os.path.join(brave_data_path, "Local Storage", "leveldb", "guardianDetectedDisabled")
-                        if os.path.exists(guardian_file):
-                            self.logger.warning(f"Guardian detected extension disabled marker found")
-                            return False
-            except Exception as storage_err:
-                self.logger.error(f"Error checking local storage: {storage_err}")
-            
-            # SECOND CHECK: Look for the extension's folder and preferences
             brave_data_path = os.path.expandvars(r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default")
-            
-            # Check Local Extension Settings directory
-            ext_settings_path = os.path.join(brave_data_path, "Local Extension Settings", extension_id)
-            if not os.path.exists(ext_settings_path):
-                self.logger.warning(f"Extension {extension_id} folder not found in Brave Local Extension Settings")
-                return False
-                
-            self.logger.info(f"Extension {extension_id} folder found in Brave Local Extension Settings")
-            
-            # Check preferences file for extension data
             prefs_path = os.path.join(brave_data_path, "Preferences")
-            if os.path.exists(prefs_path):
-                with open(prefs_path, 'r', encoding='utf-8') as f:
-                    prefs_data = json.load(f)
-                    
-                # Navigate to extensions settings
-                extensions = prefs_data.get('extensions', {}).get('settings', {})
-                if extension_id in extensions:
-                    ext_data = extensions[extension_id]
-                    self.logger.info(f"Extension data found: {ext_data}")
-                    
-                    # Check explicit state if present
-                    brave_state = ext_data.get('state')
-
-                    # FIRST: Check if it's an unpacked extension
-                    location = ext_data.get('location')
-                    blacklist_state = ext_data.get('blacklist_state', 0)
-                    disable_reasons = ext_data.get('disable_reasons', 0)
-                    withholding_permissions = ext_data.get('withholding_permissions', False)
-
-                    # If it's an unpacked extension with no disable indicators, treat as ENABLED
-                    if location == 4 and blacklist_state == 0 and disable_reasons == 0 and not withholding_permissions:
-                        self.logger.info(f"Extension {extension_id} is UNPACKED (location=4) and active in Brave - treating as ENABLED")
-                        return True
-
-                    # THEN check explicit state
-                    if brave_state is not None:
-                        if brave_state == 1:
-                            self.logger.info(f"Extension {extension_id} is ENABLED in Brave (state=1)")
-                            if not _is_incognito_allowed(ext_data):
-                                self.logger.warning(f"Extension {extension_id} is not allowed in private windows in Brave")
-                                return False
-                            return True
-                        if brave_state == 0:
-                            self.logger.warning(f"Extension {extension_id} is DISABLED in Brave (state=0)")
-                            return False
-
-                    # Check disable indicators (if not unpacked or state not explicitly set)
-                    if blacklist_state != 0:
-                        self.logger.warning(f"Extension {extension_id} is blacklisted in Brave")
-                        return False
-                    if disable_reasons != 0:
-                        self.logger.warning(f"Extension {extension_id} has disable_reasons in Brave")
-                        return False
-                    if withholding_permissions:
-                        self.logger.warning(f"Extension {extension_id} has withholding_permissions in Brave")
-                        return False
-                    
-                    # THIRD CHECK: Check for our custom extension state indicators
-                    # These are set by our extension code to indicate disabled state
-                    try:
-                        # Look for extensionDisabled in the extension data
-                        if 'extensionDisabled' in ext_data and ext_data['extensionDisabled']:
-                            self.logger.warning(f"Extension {extension_id} has extensionDisabled flag in Brave")
-                            return False
-                    except Exception as ext_err:
-                        self.logger.error(f"Error checking extension data: {ext_err}")
-                    
-                    if not _is_incognito_allowed(ext_data):
-                        self.logger.warning(f"Extension {extension_id} appears enabled but not allowed in private windows in Brave")
-                        return False
-                    self.logger.info(f"Extension {extension_id} is ENABLED in Brave (private allowed)")
-                    return True
-                else:
-                    self.logger.warning(f"Extension {extension_id} not found in Brave preferences")
-                    # If we have a folder but no preferences entry, assume it's enabled
-                    # This can happen with developer extensions
-                    return True
-            else:
+            if not os.path.exists(prefs_path):
                 self.logger.warning("Brave preferences file not found")
-                # If we have a folder but no preferences file, assume it's enabled
-                return True
+                return False
+            with open(prefs_path, 'r', encoding='utf-8') as f:
+                prefs_data = json.load(f)
+            ext_data = prefs_data.get('extensions', {}).get('settings', {}).get(extension_id)
+            if not ext_data:
+                self.logger.warning(f"Extension {extension_id} not found in Brave preferences")
+                return False
+            allowed = _is_incognito_allowed(ext_data)
+            self.logger.info(f"Brave private windows allowed={allowed}")
+            return bool(allowed)
         except Exception as e:
             self.logger.error(f"Error checking Brave extension status: {e}")
-            # Return True to avoid false positives if we can't check properly
-            return True
+            return False
     
     def handle_extension_disabled(self):        
         self.show_extension_disabled_warning()
