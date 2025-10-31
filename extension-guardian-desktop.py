@@ -126,9 +126,14 @@ def _scan_profiles_for_ext_status(base_user_data_path, extension_id, logger):
                     # Extension not installed in this profile; skip
                     continue
                 found_any = True
-                # If explicitly disabled
+                # If explicitly disabled (state=0)
                 if ext_data.get('state') == 0:
                     logger.warning(f"Extension {extension_id} DISABLED (state=0) in profile '{name}'")
+                    return False
+                # If has disable_reasons (extension is disabled for any reason)
+                disable_reasons = ext_data.get('disable_reasons', [])
+                if disable_reasons and len(disable_reasons) > 0:
+                    logger.warning(f"Extension {extension_id} DISABLED (disable_reasons={disable_reasons}) in profile '{name}'")
                     return False
                 # If incognito/private not allowed
                 if not _is_incognito_allowed(ext_data):
@@ -375,6 +380,8 @@ class ExtensionGuardian:
         self.extension_status = {}
         self.browser_processes = []
         self.monitoring_thread = None
+        self.shutdown_in_progress = False
+        self.last_shutdown_time = None
         
         self.setup_logging()
         self.setup_gui()
@@ -591,6 +598,9 @@ class ExtensionGuardian:
         known_set = set(n.lower() for n in KNOWN_BROWSER_EXE_NAMES)
         killed_images = set()
         
+        # Log check cycle start
+        self.logger.debug(f"[CHECK CYCLE] Starting browser & extension check (shutdown_in_progress={self.shutdown_in_progress})")
+        
         # Then check running browsers
         self.logger.debug("Iterating running processes...")
         for proc in psutil.process_iter(['pid', 'name', 'exe']):
@@ -636,12 +646,20 @@ class ExtensionGuardian:
 
         # Final decision: disabled if any_disabled is True
         extension_disabled = any_disabled
+        
+        # Log summary of check cycle
+        self.logger.debug(f"[CHECK CYCLE] Complete - Browsers found: {len(browsers_found)}, "
+                         f"Any checks performed: {any_check_performed}, "
+                         f"Extension disabled: {extension_disabled}, "
+                         f"Browser close enabled: {self.config['browser_close_enabled']}")
 
         self.update_browser_status(browsers_found)
         
         if extension_disabled and self.config['browser_close_enabled']:
-            self.logger.warning("EXTENSION DISABLED DETECTED - CLOSING BROWSERS")
+            self.logger.warning("EXTENSION DISABLED DETECTED - TRIGGERING BROWSER SHUTDOWN")
             self.handle_extension_disabled()
+        elif browsers_found and not extension_disabled:
+            self.logger.debug(f"[CHECK CYCLE] All extensions properly enabled in {len(browsers_found)} browser(s)")
             
     def check_direct_disabled_indicators(self):
         """Check for direct indicators that the extension has been disabled in any browser"""
@@ -777,7 +795,21 @@ class ExtensionGuardian:
             self.logger.error(f"Error checking Brave extension status: {e}")
             return False
     
-    def handle_extension_disabled(self):        
+    def handle_extension_disabled(self):
+        # Prevent multiple simultaneous shutdown attempts
+        if self.shutdown_in_progress:
+            self.logger.debug("Shutdown already in progress, skipping duplicate trigger")
+            return
+        
+        # Check if we recently shut down (within last 60 seconds)
+        if self.last_shutdown_time:
+            elapsed = (datetime.now() - self.last_shutdown_time).total_seconds()
+            if elapsed < 60:
+                self.logger.debug(f"Recent shutdown {elapsed:.1f}s ago, skipping")
+                return
+        
+        self.shutdown_in_progress = True
+        self.logger.warning("Starting shutdown sequence for disabled extension")
         self.show_extension_disabled_warning()
         threading.Thread(target=self.countdown_and_close_browsers, daemon=True).start()
     
@@ -804,19 +836,27 @@ To prevent this:
             self.logger.warning("Extension disabled - GUI not available")
     
     def countdown_and_close_browsers(self):
-        for i in range(self.config['warning_countdown_seconds'], 0, -1):
-            try:
-                self.status_var.set(f"Closing browsers in {i} seconds...")
-            except:
-                self.logger.info(f"Closing browsers in {i} seconds...")
-            time.sleep(1)
-        
-        self.close_all_browsers()
-        
         try:
-            self.status_var.set("Browsers closed - Extension disabled")
-        except:
+            for i in range(self.config['warning_countdown_seconds'], 0, -1):
+                try:
+                    self.status_var.set(f"Closing browsers in {i} seconds...")
+                except:
+                    pass
+                self.logger.info(f"Closing browsers in {i} seconds...")
+                time.sleep(1)
+            
+            self.close_all_browsers()
+            self.last_shutdown_time = datetime.now()
+            
+            try:
+                self.status_var.set("Browsers closed - Extension disabled")
+            except:
+                pass
             self.logger.info("Browsers closed - Extension disabled")
+        finally:
+            # Reset the flag so future detections can trigger shutdown
+            self.shutdown_in_progress = False
+            self.logger.info("Shutdown sequence completed, monitoring will continue")
     
     def close_all_browsers(self):
         closed_total = 0
