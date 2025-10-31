@@ -867,25 +867,19 @@ class ContentAnalyzer {
     // Comprehensive list of movie-related keywords and patterns
     const movieKeywords = [
       // Movie streaming sites (exact matches)
-      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies', 'watchseries',
+      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies',
       
       // Movie/film terms (exact matches)
-      'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
+      'movie', 'movies', 'film', 'films',
           
       // Movie-related phrases (exact matches)
       'watch online', 'free movies', 'hd movies', 'full movie',
       'movie', 'film',
       'movie download', 'film download', 'torrent',
-      
-      // TV terms (exact matches)
-      'tv shows', 'television', 'series', 'episode',
-      
+          
       // Common movie site patterns (exact matches)
       'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
       'streamingmovies', 'moviehub', 'filmhub', 'cinemahub',
-      
-      // File extensions and formats (exact matches)
-      '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm',
       
       // Common movie site domains (exact matches)
       'movie4k', 'moviehd', 'moviehub', 'filmhub', 'cinemahub'

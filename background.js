@@ -6,7 +6,7 @@ class ProductivityGuardian {
     this.isEnabled = true;
     this.blockedSites = [
       'sflix.to', 'netflix.com', 'youtube.com', 'facebook.com', 'instagram.com', 'tiktok.com',
-      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies', 'watchseries',
+      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies',
       'fullmoviess.net', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
       'streamingmovies', 'moviehub', 'filmhub', 'cinemahub', 'movie4k', 'moviehd',
       'hulu.com', 'disneyplus.com', 'hbomax.com', 'peacock.com', 'paramountplus.com',
@@ -669,7 +669,7 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
     // Comprehensive list of movie-related keywords and patterns
     const movieKeywords = [
       // Movie streaming sites (exact matches)
-      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies', 'watchseries',
+      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies',
       
       // Movie/film terms (exact matches)
       'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
@@ -678,9 +678,7 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
       'watch online', 'free movies', 'hd movies', 'full movie',
       'movie', 'film',
       'movie download', 'film download', 'torrent', 'streaming site',
-      
-      'tv shows', 'television', 'series', 'episode',
-      
+            
       // Common movie site patterns (exact matches)
       'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
       'streamingmovies', 'moviehub', 'filmhub', 'cinemahub',
