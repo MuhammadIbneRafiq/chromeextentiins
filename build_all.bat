@@ -122,16 +122,12 @@ if exist "dist\uninstall_guardian.exe" (
 )
 
 echo.
-echo Installing background components (service, startup) - UAC prompt expected...
-if exist dist\install_guardian.exe (
-  echo Running installer...
-  start /wait "" "%cd%\dist\install_guardian.exe"
-  echo Ensuring service is set to start automatically...
-  sc config ExtensionGuardianService start= auto >nul 2>&1
-  sc start ExtensionGuardianService >nul 2>&1
-  echo [OK] Background service installed and started (if permissions allowed)
+echo Starting Extension Guardian in background (no admin required)...
+if exist dist\extension-guardian-desktop.exe (
+  start "ExtensionGuardian" "%cd%\dist\extension-guardian-desktop.exe" --background
+  echo [OK] Desktop app started in background
 ) else (
-  echo [WARN] Installer missing, skipping installation
+  echo [ERROR] Desktop app missing, cannot start
 )
 
 echo.

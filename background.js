@@ -212,6 +212,60 @@ class ProductivityGuardian {
     
     // Initialize extension monitoring to prevent disabling
     this.initExtensionMonitoring();
+
+    // Check incognito/private access and warn if disabled
+    this.checkIncognitoAccess();
+  }
+
+  // Warn if the extension isn't allowed in Incognito/Private windows
+  checkIncognitoAccess() {
+    try {
+      if (!chrome.extension || !chrome.extension.isAllowedIncognitoAccess) return;
+      chrome.extension.isAllowedIncognitoAccess(async (isAllowed) => {
+        if (isAllowed) return;
+        try {
+          const { lastIncogWarn } = await chrome.storage.local.get(['lastIncogWarn']);
+          const dayMs = 24 * 60 * 60 * 1000;
+          if (lastIncogWarn && Date.now() - lastIncogWarn < dayMs) return; // avoid spamming
+          await chrome.storage.local.set({ lastIncogWarn: Date.now() });
+        } catch {}
+
+        this.showIncognitoWarning();
+      });
+    } catch {}
+  }
+
+  showIncognitoWarning() {
+    try {
+      const id = 'incognito-warning';
+      chrome.notifications?.create(id, {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: 'Enable extension in Incognito/Private',
+        message: 'To protect you in private windows, enable "Allow in Incognito" on the extensions page.',
+        buttons: [{ title: 'Open Extensions Page' }],
+        priority: 2
+      });
+
+      const openExtensions = async () => {
+        const extId = chrome.runtime.id;
+        const targets = [
+          `chrome://extensions/?id=${extId}`,
+          `brave://extensions/?id=${extId}`,
+          `edge://extensions/?id=${extId}`
+        ];
+        for (const url of targets) {
+          try { await chrome.tabs.create({ url }); break; } catch {}
+        }
+      };
+
+      chrome.notifications?.onButtonClicked.addListener((notifId, btnIdx) => {
+        if (notifId === id && btnIdx === 0) openExtensions();
+      });
+      chrome.notifications?.onClicked.addListener((notifId) => {
+        if (notifId === id) openExtensions();
+      });
+    } catch {}
   }
 
   checkFocusLockExpiry() {
@@ -241,14 +295,7 @@ class ProductivityGuardian {
     // Handle messages from content script
     chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       try {
-        // Check if current Amsterdam time is between 3 AM and 6 AM - disable all restrictions
-        const currentHour = await this.getAmsterdamHour();
-        this.log(`⏱️ Time check (Amsterdam): hour=${currentHour} -> ${currentHour >= 3 && currentHour < 6 ? 'BYPASS' : 'RESTRICT'}`);
-        if (currentHour >= 3 && currentHour < 6) {
-          this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
-          sendResponse({ shouldBlock: false, reason: 'Time-based bypass (3 AM - 6 AM)', bypassExtension: true });
-          return true;
-        }
+        // NOTE: Removed time-based bypass. Decisions are now content-based only.
         
         // COMPLETELY BYPASS Yuja platform - no extension functionality at all
         if (sender?.tab?.url && sender.tab.url.includes('tue.video.yuja.com')) {
@@ -266,6 +313,13 @@ class ProductivityGuardian {
         } else if (request.action === 'checkApiStatus') {
           await this.checkApiConnection();
           sendResponse({ working: this.apiWorking, lastCheck: this.lastApiCheck });
+        } else if (request.action === 'getAmsterdamHour') {
+          try {
+            const hour = await this.getAmsterdamHour();
+            sendResponse({ hour });
+          } catch (e) {
+            sendResponse({ error: String(e) });
+          }
         } else if (request.action === 'requestBypass') {
           const granted = await this.evaluateJustification(request.justification);
           if (granted && sender?.tab?.url) {
@@ -381,12 +435,10 @@ class ProductivityGuardian {
     try {
       this.log('🔍 AI Productivity Guardian - Analyzing URL');
       this.log('📍 URL:', url);
-      
-      // Check if current Amsterdam time is between 3 AM and 6 AM - disable all restrictions
-      const currentHour = await this.getAmsterdamHour();
-      this.log(`⏱️ Time check (Amsterdam): hour=${currentHour} -> ${currentHour >= 3 && currentHour < 6 ? 'BYPASS' : 'RESTRICT'}`);
-      if (currentHour >= 3 && currentHour < 6) {
-        this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
+
+      // Skip non-HTTP(S) URLs (extension/internal pages)
+      if (!/^https?:\/\//i.test(url)) {
+        this.log('⏭️ Skipping non-HTTP(S) URL (likely extension/internal page)');
         return;
       }
       
@@ -404,6 +456,23 @@ class ProductivityGuardian {
 
       const hostname = new URL(url).hostname;
       this.log('🏠 Hostname:', hostname);
+
+      // Night relax window for Amsterdam: 03:00–06:00 — allow everything except vulgar
+      try {
+        const amsHour = await this.getAmsterdamHour();
+        if (typeof amsHour === 'number' && amsHour >= 3 && amsHour < 6) {
+          const vulgarCheck = this.checkUrlForVulgarContent(url, hostname);
+          if (vulgarCheck.shouldBlock) {
+            this.log('🚫 BLOCKING (night vulgar):', vulgarCheck);
+            await this.blockTab(tabId, hostname, 'Vulgar content (03–06 Amsterdam)');
+            return;
+          }
+          this.log('🌙 03–06 Amsterdam: relaxing rules – allowing non‑vulgar content');
+          return;
+        }
+      } catch (e) {
+        this.log('⚠️ Amsterdam time check failed; proceeding with normal rules', String(e));
+      }
 
       // Check if explicitly allowed
       if (this.allowedSites.some(site => hostname.includes(site))) {
@@ -520,13 +589,7 @@ class ProductivityGuardian {
 
   async analyzeUrlWithAI(url, hostname) {
     try {
-      // Check if current Amsterdam time is between 3 AM and 6 AM - disable all restrictions
-      const currentHour = await this.getAmsterdamHour();
-      this.log(`⏱️ Time check (Amsterdam): hour=${currentHour} -> ${currentHour >= 3 && currentHour < 6 ? 'BYPASS' : 'RESTRICT'}`);
-      if (currentHour >= 3 && currentHour < 6) {
-        this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
-        return false; // Allow the site
-      }
+      // NOTE: Removed time-based bypass; proceed with content checks only
       
       // NEW: Aggressive movie content detection before AI analysis
       const movieBlockResult = this.checkUrlForMovieContent(url, hostname);
@@ -554,7 +617,7 @@ URL: ${url}
 Hostname: ${hostname}
 
 Consider these factors:
-- Is it related to entertainment, movies, TV shows, social media, gaming, or streaming?
+- Is it related to movies, TV shows, social media, gaming, or streaming?
 - Is it educational, professional, or work-related?
 - Does the URL suggest productive content like documentation, tutorials, or academic resources?
 
@@ -621,8 +684,7 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
       'movie', 'film',
       'movie download', 'film download', 'torrent', 'streaming site',
       
-      // Entertainment terms (exact matches)
-      'entertainment', 'tv shows', 'television', 'series', 'episode',
+      'tv shows', 'television', 'series', 'episode',
       
       // Common movie site patterns (exact matches)
       'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
@@ -693,7 +755,7 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
       
       // Inappropriate content patterns (exact matches)
       'xxx', 'x-rated', 'adult content', 'mature content', 'explicit',
-      'nsfw', 'not safe for work', 'adult entertainment', 'adult site',
+      'nsfw', 'not safe for work', 'adult site',
       
       // Common vulgar site patterns (exact matches)
       'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn', 'tube8',
@@ -745,13 +807,7 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
   }
 
   async analyzeContentWithAI(contentData) {
-    // Check if current Amsterdam time is between 3 AM and 6 AM - disable all restrictions
-    const currentHour = await this.getAmsterdamHour();
-    this.log(`⏱️ Time check (Amsterdam): hour=${currentHour} -> ${currentHour >= 3 && currentHour < 6 ? 'BYPASS' : 'RESTRICT'}`);
-    if (currentHour >= 3 && currentHour < 6) {
-      this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
-      return { shouldBlock: false, reason: 'Time-based bypass (3 AM - 6 AM)' };
-    }
+    // NOTE: Removed time-based bypass; proceed with content checks only
     
     if (!this.groqApiKey) return { shouldBlock: false, reason: 'No API key' };
     if (!this.apiWorking) return { shouldBlock: false, reason: 'API not working' };
@@ -769,12 +825,12 @@ Keywords: ${contentData.keywords}
 Content Preview: ${contentData.textContent?.substring(0, 500)}
 
 Is this content likely to be:
-1. Entertainment (movies, TV, social media, gaming, gossip)
+1. (movies, TV, social media, gaming, gossip)
 2. Educational/Professional (learning, work, documentation, tutorials)
 3. News/Information (current events, factual content)
 
 Respond with:
-- "BLOCK" if it's primarily entertainment or distracting
+- "BLOCK" if it's primarily distracting
 - "ALLOW" if it's educational, professional, or useful information
 
 Be strict for productivity - when uncertain, choose BLOCK.`;

@@ -14,6 +14,280 @@ from datetime import datetime, timedelta
 import webbrowser
 from pathlib import Path
 import logging
+import argparse
+import sys
+import subprocess
+import re
+import ctypes
+
+# -----------------------------
+# Browser detection and blocking utilities
+# -----------------------------
+
+KNOWN_BROWSER_EXE_NAMES = [
+    'chrome.exe', 'msedge.exe', 'firefox.exe', 'opera.exe', 'opera_browser.exe', 'opera.exe', 'opera_gx.exe',
+    'brave.exe', 'vivaldi.exe', 'waterfox.exe', 'librewolf.exe', 'yandex.exe', 'yandexbrowser.exe', 'maxthon.exe',
+    'ucbrowser.exe', 'safari.exe', 'chromium.exe', 'dragon.exe', 'epic.exe', 'iron.exe', 'torch.exe', 'slimjet.exe',
+    'centbrowser.exe', '360chrome.exe', 'palemoon.exe', 'comet.exe', 'duckduckgo.exe', 'ddg.exe'
+]
+
+# The only browsers allowed to remain running
+ALLOWED_BROWSER_EXE_NAMES = [
+    'chrome.exe', 'msedge.exe', 'brave.exe', 'comet.exe'
+]
+
+VENDOR_OR_PRODUCT_KEYWORDS = [
+    'chrome', 'chromium', 'edge', 'firefox', 'mozilla', 'opera', 'vivaldi', 'brave', 'yandex', 'waterfox',
+    'librewolf', 'dragon', 'epic', 'iron', 'torch', 'slimjet', 'cent', '360chrome', 'palemoon', 'maxthon', 'tor',
+    'comet', 'duckduckgo', 'ddg'
+]
+
+def _get_logger(maybe_logger=None):
+    if maybe_logger is not None:
+        return maybe_logger
+    return logging.getLogger('browser_blocker')
+
+def _is_incognito_allowed(ext_settings_obj):
+    """Best-effort parse for Chromium incognito allowance.
+    Different Chromium builds store this flag slightly differently. We treat any
+    of the following as allowed in incognito:
+      - incognito == True
+      - incognito is a non-zero integer (e.g., 1 or 2)
+      - incognito string equals 'spanning' or 'split' (case-insensitive)
+      - allow_in_incognito == True
+    """
+    try:
+        if not isinstance(ext_settings_obj, dict):
+            return False
+        val = ext_settings_obj.get('incognito')
+        if isinstance(val, bool):
+            if val:
+                return True
+        elif isinstance(val, (int, float)):
+            if int(val) != 0:
+                return True
+        elif isinstance(val, str):
+            if val.lower() in ('spanning', 'split', 'enabled', 'true', 'on'):
+                return True
+        # Alternate key seen in some variants
+        if bool(ext_settings_obj.get('allow_in_incognito')):
+            return True
+    except Exception:
+        return False
+    return False
+
+def extract_exe_from_command(command):
+    try:
+        if not command:
+            return None
+        m = re.match(r'^\s*"?([^"\s]+?\.exe)"?', command.strip(), re.IGNORECASE)
+        return m.group(1) if m else None
+    except Exception:
+        return None
+
+def get_registered_browser_exes():
+    exe_paths = set()
+    roots = [
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Clients\StartMenuInternet"),
+        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Clients\StartMenuInternet"),
+    ]
+    for hive, root in roots:
+        try:
+            with winreg.OpenKey(hive, root) as key:
+                idx = 0
+                while True:
+                    try:
+                        sub_name = winreg.EnumKey(key, idx)
+                        idx += 1
+                    except OSError:
+                        break
+                    try:
+                        cmd_key_path = root + f"\\{sub_name}\\shell\\open\\command"
+                        with winreg.OpenKey(hive, cmd_key_path) as cmd_key:
+                            cmd, _ = winreg.QueryValueEx(cmd_key, None)
+                            exe = extract_exe_from_command(cmd)
+                            if exe:
+                                exe_paths.add(os.path.normpath(exe))
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+    return list(exe_paths)
+
+def discover_browsers_from_filesystem():
+    candidates = set()
+    roots = [
+        os.environ.get('ProgramFiles'),
+        os.environ.get('ProgramFiles(x86)'),
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs'),
+        os.environ.get('LOCALAPPDATA'),
+    ]
+    roots = [p for p in roots if p and os.path.isdir(p)]
+
+    # Quick known paths without deep walking
+    known_rel_paths = [
+        (['Google', 'Chrome', 'Application'], 'chrome.exe'),
+        (['Microsoft', 'Edge', 'Application'], 'msedge.exe'),
+        (['BraveSoftware', 'Brave-Browser', 'Application'], 'brave.exe'),
+        (['Mozilla Firefox'], 'firefox.exe'),
+        (['Vivaldi', 'Application'], 'vivaldi.exe'),
+        (['Opera'], 'opera.exe'),
+        (['Opera GX'], 'opera.exe'),
+        (['Yandex', 'YandexBrowser'], 'browser.exe'),
+        (['Waterfox'], 'waterfox.exe'),
+        (['LibreWolf'], 'librewolf.exe'),
+        (['Comodo', 'Dragon'], 'dragon.exe'),
+        (['SRWare Iron'], 'iron.exe'),
+        (['Torch'], 'torch.exe'),
+        (['SlimJet'], 'chrome.exe'),
+        (['CentBrowser', 'Application'], 'chrome.exe'),
+        (['Chromium', 'Application'], 'chrome.exe'),
+        (['Tor Browser', 'Browser'], 'firefox.exe'),
+        (['Perplexity', 'Comet', 'Application'], 'comet.exe'),
+    ]
+    for root in roots:
+        for parts, exe_name in known_rel_paths:
+            p = os.path.join(root, *parts, exe_name)
+            if os.path.isfile(p):
+                candidates.add(os.path.normpath(p))
+
+    # Light scan: walk only top 3 levels, filter by keywords and known exe names
+    def shallow_walk(base, max_depth=3):
+        base = os.path.normpath(base)
+        for dirpath, dirnames, filenames in os.walk(base):
+            depth = os.path.normpath(dirpath).count(os.sep) - base.count(os.sep)
+            if depth > max_depth:
+                # prune deeper traversal
+                dirnames[:] = []
+                continue
+            for fname in filenames:
+                lower = fname.lower()
+                if lower in KNOWN_BROWSER_EXE_NAMES or any(k in lower for k in VENDOR_OR_PRODUCT_KEYWORDS):
+                    full = os.path.join(dirpath, fname)
+                    candidates.add(os.path.normpath(full))
+
+    for root in roots:
+        try:
+            shallow_walk(root, max_depth=3)
+        except Exception:
+            pass
+
+    return list(candidates)
+
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+    except Exception:
+        return False
+
+def block_exe_firewall(exe_path, logger=None):
+    logger = _get_logger(logger)
+    if not exe_path or not os.path.isfile(exe_path):
+        return False
+    rule_name = f"ExtensionGuardian_Block_{os.path.basename(exe_path)}"
+    try:
+        subprocess.run(["netsh", "advfirewall", "firewall", "delete", "rule", f"name={rule_name}"], capture_output=True)
+        subprocess.run(["netsh", "advfirewall", "firewall", "add", "rule", f"name={rule_name}", "dir=out", "action=block", f"program={exe_path}", "enable=yes"], check=False, capture_output=True)
+        subprocess.run(["netsh", "advfirewall", "firewall", "add", "rule", f"name={rule_name}", "dir=in", "action=block", f"program={exe_path}", "enable=yes"], check=False, capture_output=True)
+        logger.info(f"Firewall block ensured for {exe_path}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to add firewall rule for {exe_path}: {e}")
+        return False
+
+def kill_processes_for_exe(exe_path, logger=None):
+    logger = _get_logger(logger)
+    killed = 0
+    try:
+        image_name = os.path.basename(exe_path)
+        logger.debug(f"Attempting to kill processes for image: {image_name}")
+        # Fast path: kill by image name
+        try:
+            tk = subprocess.run(
+                ['taskkill', '/IM', image_name, '/F'],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=1
+            )
+            # taskkill exits 0 if at least one process killed
+            if tk.returncode == 0:
+                # We cannot know exact count without parsing stdout; assume >=1
+                killed += 1
+            else:
+                logger.debug(f"taskkill returned code {tk.returncode} for {image_name}")
+        except subprocess.TimeoutExpired:
+            logger.debug(f"taskkill timeout for {image_name}")
+
+        # Fallback: PowerShell Get-Process by name (lighter than CIM)
+        if killed == 0:
+            ps_cmd = [
+                'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
+                f"$p=Get-Process -Name '{os.path.splitext(image_name)[0]}' -ErrorAction SilentlyContinue; if($p){{$p|Stop-Process -Force -PassThru|Select-Object -Expand Id|ConvertTo-Json -Compress}}"
+            ]
+            try:
+                proc = subprocess.run(ps_cmd, capture_output=True, text=True, timeout=3)
+                if proc.returncode == 0 and proc.stdout:
+                    try:
+                        data = json.loads(proc.stdout)
+                        if isinstance(data, list):
+                            killed += len(data)
+                        elif isinstance(data, int):
+                            killed += 1
+                    except Exception:
+                        pass
+                else:
+                    logger.debug(f"PowerShell Stop-Process returned code {proc.returncode} for {image_name}; stdout='{(proc.stdout or '').strip()[:120]}'")
+            except subprocess.TimeoutExpired:
+                logger.debug(f"PowerShell Stop-Process timeout for {image_name}")
+
+        if killed:
+            logger.info(f"Terminated {killed} process(es) for {exe_path}")
+    except Exception as e:
+        logger.error(f"Error killing processes for {exe_path}: {e}")
+    return killed
+
+def discover_installed_browser_paths():
+    paths = set()
+    for p in get_registered_browser_exes():
+        paths.add(os.path.normpath(p))
+    for p in discover_browsers_from_filesystem():
+        paths.add(os.path.normpath(p))
+    return sorted(paths)
+
+def ensure_block_all_browsers(logger=None):
+    logger = _get_logger(logger)
+    results = {
+        'discovered': [],
+        'killed': {},
+    }
+    discovered = discover_installed_browser_paths()
+    results['discovered'] = discovered
+    for exe in discovered:
+        image = os.path.basename(exe).lower()
+        logger.debug(f"Discovered browser candidate: exe='{exe}' image='{image}'")
+        if image in (name.lower() for name in ALLOWED_BROWSER_EXE_NAMES):
+            # Skip allowed browsers (Chrome, Edge, Brave, Comet)
+            logger.debug(f"Skipping allowed browser image='{image}'")
+            continue
+        killed_count = kill_processes_for_exe(exe, logger=logger)
+        results['killed'][exe] = killed_count
+    return results
+
+def run_browser_blocker_cli(watch=False, interval=10):
+    logger = _get_logger(None)
+    if watch:
+        logger.info(f"Starting browser blocker in watch mode (interval={interval}s)")
+        try:
+            while True:
+                res = ensure_block_all_browsers(logger=logger)
+                print(json.dumps(res, indent=2))
+                time.sleep(max(1, int(interval)))
+        except KeyboardInterrupt:
+            print("Stopped.")
+    else:
+        res = ensure_block_all_browsers(logger=logger)
+        print(json.dumps(res, indent=2))
+        return res
 
 class ExtensionGuardian:
     # Version identifier - update this to verify new builds
@@ -35,7 +309,7 @@ class ExtensionGuardian:
             'browser_close_enabled': True,
             'uninstall_protection_enabled': False,
             'protection_duration_hours': 24,
-            'check_interval_seconds': 10,  # Check every 10 seconds for faster detection
+            'check_interval_seconds': 1,  # Faster detection
             'warning_countdown_seconds': 15,
             'browsers': ['chrome.exe', 'msedge.exe', 'brave.exe', 'comet.exe']
         }
@@ -67,7 +341,7 @@ class ExtensionGuardian:
         log_dir.mkdir(parents=True, exist_ok=True)
         
         logging.basicConfig(
-            level=logging.INFO,
+            level=logging.DEBUG,
             format='%(asctime)s - %(levelname)s - %(message)s',
             handlers=[
                 logging.FileHandler(log_dir / f"guardian_{datetime.now().strftime('%Y%m%d')}.log", encoding='utf-8'),
@@ -169,7 +443,7 @@ class ExtensionGuardian:
         interval_frame.pack(fill='x', padx=5, pady=2)
         ttk.Label(interval_frame, text="Check Interval (seconds):").pack(side='left')
         self.interval_var = tk.IntVar(value=self.config['check_interval_seconds'])
-        ttk.Spinbox(interval_frame, from_=5, to=300, textvariable=self.interval_var, width=10).pack(side='right')
+        ttk.Spinbox(interval_frame, from_=1, to=300, textvariable=self.interval_var, width=10).pack(side='right')
         
         ext_frame = ttk.LabelFrame(self.settings_frame, text="Extension Settings")
         ext_frame.pack(fill='x', padx=10, pady=5)
@@ -231,6 +505,9 @@ class ExtensionGuardian:
         
         self.monitoring_thread = threading.Thread(target=self.monitoring_loop, daemon=True)
         self.monitoring_thread.start()
+        # Start aggressive block-all watcher alongside monitoring
+        self.block_all_thread = threading.Thread(target=self.block_all_watch_loop, daemon=True)
+        self.block_all_thread.start()
             
     def stop_monitoring(self):
         try:
@@ -242,6 +519,7 @@ class ExtensionGuardian:
     def monitoring_loop(self):
         while self.is_monitoring:
             try:
+                self.logger.debug(f"[tick] scanning processes (interval={self.config['check_interval_seconds']}s)")
                 self.check_browsers_and_extensions()
                 time.sleep(self.config['check_interval_seconds'])
             except Exception as e:
@@ -254,11 +532,19 @@ class ExtensionGuardian:
         any_check_performed = False
         any_enabled = False
         any_disabled = False
+        allowed_set = set(b.lower() for b in self.config['browsers'])
+        known_set = set(n.lower() for n in KNOWN_BROWSER_EXE_NAMES)
+        killed_images = set()
         
         # Then check running browsers
+        self.logger.debug("Iterating running processes...")
         for proc in psutil.process_iter(['pid', 'name', 'exe']):
             try:
-                if proc.info['name'].lower() in [b.lower() for b in self.config['browsers']]:
+                name_lower = (proc.info['name'] or '').lower()
+                if not name_lower:
+                    continue
+                self.logger.debug(f"Process seen: name={proc.info['name']} pid={proc.info['pid']} exe={proc.info['exe']}")
+                if name_lower in allowed_set:
                     browsers_found.append({
                         'name': proc.info['name'],
                         'pid': proc.info['pid'],
@@ -273,6 +559,14 @@ class ExtensionGuardian:
                     else:
                         any_enabled = True
                         self.logger.info(f"Extension enabled in {proc.info['name']} (PID: {proc.info['pid']})")
+                elif name_lower in known_set and name_lower not in killed_images:
+                    # Unauthorized browser detected - kill immediately without admin
+                    self.logger.warning(f"Unauthorized browser detected: {proc.info['name']} (PID: {proc.info['pid']}) - closing")
+                    try:
+                        kill_processes_for_exe(proc.info['name'], logger=self.logger)
+                    except Exception:
+                        pass
+                    killed_images.add(name_lower)
                         
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
@@ -448,6 +742,10 @@ class ExtensionGuardian:
                     # THEN check explicit state for store-installed extensions
                     if state == 1:
                         self.logger.info(f"Extension {extension_id} is ENABLED in Chrome")
+                        # Verify incognito allowance
+                        if not _is_incognito_allowed(ext_data):
+                            self.logger.warning(f"Extension {extension_id} is not allowed in incognito in Chrome")
+                            return False
                         return True
                     if state == 0:
                         self.logger.warning(f"Extension {extension_id} is DISABLED (state=0) in Chrome")
@@ -474,8 +772,11 @@ class ExtensionGuardian:
                     except Exception as ext_err:
                         self.logger.error(f"Error checking Chrome extension data: {ext_err}")
                     
-                    # If we have extension data and no negatives, assume it's enabled
-                    self.logger.info(f"Extension {extension_id} treated as ENABLED in Chrome (no disable indicators)")
+                    # If we have extension data and no negatives, ensure incognito is allowed
+                    if not _is_incognito_allowed(ext_data):
+                        self.logger.warning(f"Extension {extension_id} appears enabled but not allowed in incognito in Chrome")
+                        return False
+                    self.logger.info(f"Extension {extension_id} treated as ENABLED in Chrome (incognito allowed)")
                     return True
                 else:
                     self.logger.warning(f"Extension {extension_id} not found in Chrome preferences")
@@ -528,6 +829,9 @@ class ExtensionGuardian:
                     # THEN check explicit state
                     if state == 1:
                         self.logger.info(f"Extension {extension_id} is ENABLED in Edge")
+                        if not _is_incognito_allowed(ext_data):
+                            self.logger.warning(f"Extension {extension_id} is not allowed in InPrivate in Edge")
+                            return False
                         return True
                     if state == 0:
                         self.logger.warning(f"Extension {extension_id} is DISABLED (state=0) in Edge")
@@ -544,7 +848,10 @@ class ExtensionGuardian:
                     except Exception as ext_err:
                         self.logger.error(f"Error checking Edge extension data: {ext_err}")
 
-                    self.logger.info(f"Extension {extension_id} treated as ENABLED in Edge (no disable indicators)")
+                    if not _is_incognito_allowed(ext_data):
+                        self.logger.warning(f"Extension {extension_id} appears enabled but not allowed in InPrivate in Edge")
+                        return False
+                    self.logger.info(f"Extension {extension_id} treated as ENABLED in Edge (InPrivate allowed)")
                     return True
                 else:
                     self.logger.warning(f"Extension {extension_id} not found in Edge preferences")
@@ -618,6 +925,9 @@ class ExtensionGuardian:
                     # THEN check explicit state
                     if state == 1:
                         self.logger.info(f"Extension {extension_id} is ENABLED in Comet")
+                        if not _is_incognito_allowed(ext_data):
+                            self.logger.warning(f"Extension {extension_id} is not allowed in incognito in Comet")
+                            return False
                         return True
                     if state == 0:
                         self.logger.warning(f"Extension {extension_id} is DISABLED (state=0) in Comet")
@@ -637,8 +947,10 @@ class ExtensionGuardian:
                     except Exception as ext_err:
                         self.logger.error(f"Error checking Comet extension data: {ext_err}")
                     
-                    # If we have extension data and no negatives, assume it's enabled
-                    self.logger.info(f"Extension {extension_id} treated as ENABLED in Comet (no disable indicators)")
+                    if not _is_incognito_allowed(ext_data):
+                        self.logger.warning(f"Extension {extension_id} appears enabled but not allowed in incognito in Comet")
+                        return False
+                    self.logger.info(f"Extension {extension_id} treated as ENABLED in Comet (incognito allowed)")
                     return True
                 else:
                     self.logger.warning(f"Extension {extension_id} not found in Comet preferences")
@@ -718,6 +1030,9 @@ class ExtensionGuardian:
                     if brave_state is not None:
                         if brave_state == 1:
                             self.logger.info(f"Extension {extension_id} is ENABLED in Brave (state=1)")
+                            if not _is_incognito_allowed(ext_data):
+                                self.logger.warning(f"Extension {extension_id} is not allowed in private windows in Brave")
+                                return False
                             return True
                         if brave_state == 0:
                             self.logger.warning(f"Extension {extension_id} is DISABLED in Brave (state=0)")
@@ -744,8 +1059,10 @@ class ExtensionGuardian:
                     except Exception as ext_err:
                         self.logger.error(f"Error checking extension data: {ext_err}")
                     
-                    # If we have the extension data and no disable indicators, assume it's enabled
-                    self.logger.info(f"Extension {extension_id} is ENABLED in Brave")
+                    if not _is_incognito_allowed(ext_data):
+                        self.logger.warning(f"Extension {extension_id} appears enabled but not allowed in private windows in Brave")
+                        return False
+                    self.logger.info(f"Extension {extension_id} is ENABLED in Brave (private allowed)")
                     return True
                 else:
                     self.logger.warning(f"Extension {extension_id} not found in Brave preferences")
@@ -803,18 +1120,25 @@ To prevent this:
             self.logger.info("Browsers closed - Extension disabled")
     
     def close_all_browsers(self):
-        closed_count = 0
-        
+        closed_total = 0
+        known_set = set(n.lower() for n in KNOWN_BROWSER_EXE_NAMES)
+        seen_images = set()
+
         for proc in psutil.process_iter(['pid', 'name']):
             try:
-                if proc.info['name'].lower() in [b.lower() for b in self.config['browsers']]:
-                    proc.terminate()
-                    closed_count += 1
-                    self.logger.info(f"Closed browser: {proc.info['name']} (PID: {proc.info['pid']})")
+                name_lower = (proc.info['name'] or '').lower()
+                if name_lower and name_lower in known_set and name_lower not in seen_images:
+                    killed = kill_processes_for_exe(proc.info['name'], logger=self.logger)
+                    closed_total += killed
+                    seen_images.add(name_lower)
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
-        
-        self.logger.info(f"Closed {closed_count} browser processes")
+
+        self.logger.info(f"Closed {closed_total} browser process(es)")
+
+    def ensure_all_browsers_blocked(self):
+        """Discover installed browsers and enforce blocks immediately."""
+        return ensure_block_all_browsers(logger=self.logger)
     
     def enable_protection(self):
         duration = self.protection_duration_var.get()
@@ -1055,6 +1379,16 @@ To prevent this:
             except Exception as e:
                 self.logger.error(f"Error in background monitoring: {e}")
                 time.sleep(5)
+
+    def block_all_watch_loop(self):
+        """Continuously enforce block-all discovery every second."""
+        while getattr(self, 'is_monitoring', False):
+            try:
+                ensure_block_all_browsers(logger=self.logger)
+                time.sleep(1)
+            except Exception as e:
+                self.logger.error(f"Error in block-all watcher: {e}")
+                time.sleep(1)
     
     def run(self):
         # If background mode is enabled, hide the window and start monitoring
@@ -1066,6 +1400,9 @@ To prevent this:
             # Start monitoring in a separate thread so GUI can still process events
             self.monitoring_thread = threading.Thread(target=self.continue_background_monitoring, daemon=True)
             self.monitoring_thread.start()
+            # Start the block-all watcher too
+            self.block_all_thread = threading.Thread(target=self.block_all_watch_loop, daemon=True)
+            self.block_all_thread.start()
             
             # Keep the main thread alive to handle system tray
             self.root.mainloop()
@@ -1073,6 +1410,17 @@ To prevent this:
             self.root.mainloop()
 
 if __name__ == "__main__":
-    # Always run in background mode; normal mode is removed
+    parser = argparse.ArgumentParser(description="Extension Guardian Desktop")
+    parser.add_argument("--block-browsers-once", action="store_true", help="Detect and block all browsers once, then exit")
+    parser.add_argument("--block-browsers-watch", action="store_true", help="Continuously detect and block browsers")
+    parser.add_argument("--interval", type=int, default=1, help="Scan interval in seconds for watch mode")
+    parser.add_argument("--background", action="store_true", help="Start GUI in background (default behavior)")
+    args, _ = parser.parse_known_args()
+
+    if args.block_browsers_once or args.block_browsers_watch:
+        run_browser_blocker_cli(watch=args.block_browsers_watch, interval=args.interval)
+        sys.exit(0)
+
+    # Default: start the desktop app
     app = ExtensionGuardian(background_mode=True)
     app.run()

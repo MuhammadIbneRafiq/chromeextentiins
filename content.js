@@ -10,6 +10,31 @@ class ContentAnalyzer {
     this.init();
   }
 
+  async getAmsterdamHour() {
+    // Prefer asking background (which uses network providers and cache)
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'getAmsterdamHour' });
+      if (res && typeof res.hour === 'number') {
+        this.log('🕒 Amsterdam hour from background (content): ' + res.hour);
+        return res.hour;
+      }
+    } catch (e) {
+      // fall through to Intl fallback
+    }
+    // Fallback: compute with Intl locally
+    try {
+      const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Amsterdam', hour: '2-digit', hour12: false });
+      const hourStr = fmt.format(Date.now());
+      const hour = parseInt(hourStr, 10);
+      this.log('🕒 Amsterdam hour via Intl (content): ' + hour);
+      return hour;
+    } catch (e) {
+      const h = new Date().getHours();
+      this.log('⚠️ Amsterdam hour fallback (local): ' + h);
+      return h;
+    }
+  }
+
   async init() {
     // Wait for DOM to be ready
     if (document.readyState === 'loading') {
@@ -93,6 +118,23 @@ class ContentAnalyzer {
       // Wait a bit for content to load
       setTimeout(async () => {
         const contentData = await this.extractContentData();
+        
+        // Night relax window for Amsterdam: 03:00–06:00 — allow everything except vulgar
+        try {
+          const amsHour = await this.getAmsterdamHour();
+          if (typeof amsHour === 'number' && amsHour >= 3 && amsHour < 6) {
+            const vulgarBlockResult = this.checkForVulgarContent(contentData);
+            if (vulgarBlockResult.shouldBlock) {
+              this.log('🚫 VULGAR CONTENT (night window) - BLOCKING:', vulgarBlockResult);
+              this.blockPage(vulgarBlockResult.reason);
+              return;
+            }
+            this.log('🌙 03–06 Amsterdam: relaxing rules – allowing non‑vulgar content');
+            return; // Skip all other blocking during relax window
+          }
+        } catch (e) {
+          this.log('⚠️ Amsterdam time check failed; proceeding with normal rules');
+        }
         
         // NEW: AGGRESSIVE MOVIE BLOCKING - Check for movie-related content first
         const movieBlockResult = this.checkForMovieContent(contentData);
@@ -287,7 +329,7 @@ class ContentAnalyzer {
       data.chatQuery = await this.extractChatQuery();
     }
 
-    // Look for streaming/entertainment indicators (simplified)
+    // Look for streaming indicators (simplified)
     data.hasVideoElements = document.querySelectorAll('video').length > 0;
     
     this.log('🎥 Video Elements:', data.hasVideoElements);
@@ -840,8 +882,8 @@ class ContentAnalyzer {
       'movie', 'film',
       'movie download', 'film download', 'torrent',
       
-      // Entertainment terms (exact matches)
-      'entertainment', 'tv shows', 'television', 'series', 'episode',
+      // TV terms (exact matches)
+      'tv shows', 'television', 'series', 'episode',
       
       // Common movie site patterns (exact matches)
       'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
@@ -992,7 +1034,7 @@ class ContentAnalyzer {
       
       // Inappropriate content patterns (exact matches)
       'xxx', 'x-rated', 'adult content', 'mature content', 'explicit',
-      'nsfw', 'not safe for work', 'adult entertainment', 'adult site',
+      'nsfw', 'not safe for work', 'adult site',
       
       // Common vulgar site patterns (exact matches)
       'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn', 'tube8',
