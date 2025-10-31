@@ -94,6 +94,62 @@ def _is_incognito_allowed(ext_settings_obj):
         return False
     return False
 
+def _scan_profiles_for_ext_status(base_user_data_path, extension_id, logger):
+    """Return True if extension is enabled (incognito/private allowed) across profiles; False if disabled/blocked.
+    Logic:
+      - Iterate all profile directories containing a Preferences file (e.g., Default, Profile 1, Profile 2)
+      - If any profile has ext present with state==0 or incognito not allowed => DISABLED (return False)
+      - If at least one profile has ext present with incognito allowed => mark enabled_candidate=True
+      - If extension not present in any profile => DISABLED (return False)
+      - Else return enabled_candidate
+    """
+    try:
+        enabled_candidate = False
+        found_any = False
+        if not os.path.isdir(base_user_data_path):
+            return False
+        for name in os.listdir(base_user_data_path):
+            profile_dir = os.path.join(base_user_data_path, name)
+            if not os.path.isdir(profile_dir):
+                continue
+            # Profile dirs are typically 'Default' or 'Profile *'
+            if name != 'Default' and not name.startswith('Profile'):
+                continue
+            prefs_path = os.path.join(profile_dir, 'Preferences')
+            if not os.path.isfile(prefs_path):
+                continue
+            try:
+                with open(prefs_path, 'r', encoding='utf-8') as f:
+                    prefs = json.load(f)
+                ext_data = prefs.get('extensions', {}).get('settings', {}).get(extension_id)
+                if not ext_data:
+                    # Extension not installed in this profile; skip
+                    continue
+                found_any = True
+                # If explicitly disabled
+                if ext_data.get('state') == 0:
+                    logger.warning(f"Extension {extension_id} DISABLED (state=0) in profile '{name}'")
+                    return False
+                # If incognito/private not allowed
+                if not _is_incognito_allowed(ext_data):
+                    logger.warning(f"Extension {extension_id} not allowed in private/incognito in profile '{name}'")
+                    return False
+                enabled_candidate = True
+            except Exception as e:
+                # Skip malformed profiles
+                logger.debug(f"Error reading Preferences for profile '{name}': {e}")
+                continue
+        if not found_any:
+            # Not present in any profile => treat as disabled
+            return False
+        return enabled_candidate
+    except Exception as e:
+        try:
+            logger.error(f"Error scanning profiles: {e}")
+        except Exception:
+            pass
+        return False
+
 def extract_exe_from_command(command):
     try:
         if not command:
@@ -680,20 +736,10 @@ class ExtensionGuardian:
     def check_chrome_extension_status(self):
         try:
             extension_id = self.config['extension_id']
-            chrome_data_path = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data\Default")
-            prefs_path = os.path.join(chrome_data_path, "Preferences")
-            if not os.path.exists(prefs_path):
-                self.logger.warning("Chrome preferences file not found")
-                return False
-            with open(prefs_path, 'r', encoding='utf-8') as f:
-                prefs_data = json.load(f)
-            ext_data = prefs_data.get('extensions', {}).get('settings', {}).get(extension_id)
-            if not ext_data:
-                self.logger.warning(f"Extension {extension_id} not found in Chrome preferences")
-                return False
-            allowed = _is_incognito_allowed(ext_data)
-            self.logger.info(f"Chrome incognito allowed={allowed}")
-            return bool(allowed)
+            base = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data")
+            status = _scan_profiles_for_ext_status(base, extension_id, self.logger)
+            self.logger.info(f"Chrome status (profiles)={status}")
+            return status
         except Exception as e:
             self.logger.error(f"Error checking Chrome extension status: {e}")
             return False
@@ -701,20 +747,10 @@ class ExtensionGuardian:
     def check_edge_extension_status(self):
         try:
             extension_id = self.config['extension_id']
-            edge_data_path = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default")
-            prefs_path = os.path.join(edge_data_path, "Preferences")
-            if not os.path.exists(prefs_path):
-                self.logger.warning("Edge preferences file not found")
-                return False
-            with open(prefs_path, 'r', encoding='utf-8') as f:
-                prefs_data = json.load(f)
-            ext_data = prefs_data.get('extensions', {}).get('settings', {}).get(extension_id)
-            if not ext_data:
-                self.logger.warning(f"Extension {extension_id} not found in Edge preferences")
-                return False
-            allowed = _is_incognito_allowed(ext_data)
-            self.logger.info(f"Edge InPrivate allowed={allowed}")
-            return bool(allowed)
+            base = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\User Data")
+            status = _scan_profiles_for_ext_status(base, extension_id, self.logger)
+            self.logger.info(f"Edge status (profiles)={status}")
+            return status
         except Exception as e:
             self.logger.error(f"Error checking Edge extension: {e}")
             return False
@@ -722,20 +758,10 @@ class ExtensionGuardian:
     def check_comet_extension_status(self):
         try:
             extension_id = self.config['extension_id']
-            comet_data_path = os.path.expandvars(r"%LOCALAPPDATA%\Perplexity\Comet\User Data\Default")
-            prefs_path = os.path.join(comet_data_path, "Preferences")
-            if not os.path.exists(prefs_path):
-                self.logger.warning("Comet preferences file not found")
-                return False
-            with open(prefs_path, 'r', encoding='utf-8') as f:
-                prefs_data = json.load(f)
-            ext_data = prefs_data.get('extensions', {}).get('settings', {}).get(extension_id)
-            if not ext_data:
-                self.logger.warning(f"Extension {extension_id} not found in Comet preferences")
-                return False
-            allowed = _is_incognito_allowed(ext_data)
-            self.logger.info(f"Comet incognito allowed={allowed}")
-            return bool(allowed)
+            base = os.path.expandvars(r"%LOCALAPPDATA%\Perplexity\Comet\User Data")
+            status = _scan_profiles_for_ext_status(base, extension_id, self.logger)
+            self.logger.info(f"Comet status (profiles)={status}")
+            return status
         except Exception as e:
             self.logger.error(f"Error checking Comet extension status: {e}")
             return False
@@ -743,20 +769,10 @@ class ExtensionGuardian:
     def check_brave_extension_status(self):
         try:
             extension_id = self.config['extension_id']
-            brave_data_path = os.path.expandvars(r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default")
-            prefs_path = os.path.join(brave_data_path, "Preferences")
-            if not os.path.exists(prefs_path):
-                self.logger.warning("Brave preferences file not found")
-                return False
-            with open(prefs_path, 'r', encoding='utf-8') as f:
-                prefs_data = json.load(f)
-            ext_data = prefs_data.get('extensions', {}).get('settings', {}).get(extension_id)
-            if not ext_data:
-                self.logger.warning(f"Extension {extension_id} not found in Brave preferences")
-                return False
-            allowed = _is_incognito_allowed(ext_data)
-            self.logger.info(f"Brave private windows allowed={allowed}")
-            return bool(allowed)
+            base = os.path.expandvars(r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data")
+            status = _scan_profiles_for_ext_status(base, extension_id, self.logger)
+            self.logger.info(f"Brave status (profiles)={status}")
+            return status
         except Exception as e:
             self.logger.error(f"Error checking Brave extension status: {e}")
             return False
