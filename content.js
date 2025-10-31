@@ -871,12 +871,7 @@ class ContentAnalyzer {
       
       // Movie/film terms (exact matches)
       'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
-      
-      // Streaming platforms (exact matches)
-      'netflix', 'hulu', 'disney+', 'disneyplus', 'amazon prime', 'prime',
-      'hbo max', 'hbomax', 'peacock', 'paramount+', 'paramountplus',
-      'apple tv', 'appletv', 'crunchyroll', 'funimation', 'vudu',
-      
+          
       // Movie-related phrases (exact matches)
       'watch online', 'free movies', 'hd movies', 'full movie',
       'movie', 'film',

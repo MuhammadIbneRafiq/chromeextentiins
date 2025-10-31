@@ -674,11 +674,6 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
       // Movie/film terms (exact matches)
       'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
       
-      // Streaming platforms (exact matches)
-      'netflix', 'hulu', 'disney+', 'disneyplus', 'amazon prime', 'prime',
-      'hbo max', 'hbomax', 'peacock', 'paramount+', 'paramountplus',
-      'apple tv', 'appletv', 'crunchyroll', 'funimation', 'vudu',
-      
       // Movie-related phrases (exact matches)
       'watch online', 'free movies', 'hd movies', 'full movie',
       'movie', 'film',
@@ -689,9 +684,6 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
       // Common movie site patterns (exact matches)
       'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
       'streamingmovies', 'moviehub', 'filmhub', 'cinemahub',
-      
-      // File extensions and formats (exact matches)
-      '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm',
       
       // Common movie site domains (exact matches)
       'movie4k', 'moviehd', 'moviehub', 'filmhub', 'cinemahub'
