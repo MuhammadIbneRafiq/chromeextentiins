@@ -14,7 +14,6 @@ from datetime import datetime, timedelta
 import webbrowser
 from pathlib import Path
 import logging
-import argparse
 import sys
 import subprocess
 import re
@@ -519,9 +518,9 @@ class ExtensionGuardian:
     def monitoring_loop(self):
         while self.is_monitoring:
             try:
-                self.logger.debug(f"[tick] scanning processes (interval={self.config['check_interval_seconds']}s)")
+                self.logger.debug(f"[tick] scanning processes (interval=1s)")
                 self.check_browsers_and_extensions()
-                time.sleep(self.config['check_interval_seconds'])
+                time.sleep(1)
             except Exception as e:
                 self.logger.error(f"Error in monitoring loop: {e}")
                 time.sleep(5)
@@ -946,6 +945,8 @@ To prevent this:
             self.config['browser_close_enabled'] = True
             # Enforce the supported Chromium browsers only (remove Firefox etc.)
             self.config['browsers'] = ['chrome.exe', 'msedge.exe', 'brave.exe', 'comet.exe']
+            # Always enforce 1s check interval
+            self.config['check_interval_seconds'] = 1
             # Ensure countdown is at least 15 seconds as required
             try:
                 if int(self.config.get('warning_countdown_seconds', 15)) < 15:
@@ -975,7 +976,7 @@ To prevent this:
                 else:
                     exe_path = f"{sys.executable} \"{Path(__file__).resolve()}\""
 
-            command = f'"{exe_path}" --background'
+            command = f'"{exe_path}"'
 
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_key_path, 0, winreg.KEY_SET_VALUE) as key:
                 winreg.SetValueEx(key, value_name, 0, winreg.REG_SZ, command)
@@ -1059,7 +1060,7 @@ To prevent this:
         while self.is_monitoring:
             try:
                 self.check_browsers_and_extensions()
-                time.sleep(self.config['check_interval_seconds'])
+                time.sleep(1)
             except Exception as e:
                 self.logger.error(f"Error in background monitoring: {e}")
                 time.sleep(5)
@@ -1094,17 +1095,28 @@ To prevent this:
             self.root.mainloop()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Extension Guardian Desktop")
-    parser.add_argument("--block-browsers-once", action="store_true", help="Detect and block all browsers once, then exit")
-    parser.add_argument("--block-browsers-watch", action="store_true", help="Continuously detect and block browsers")
-    parser.add_argument("--interval", type=int, default=1, help="Scan interval in seconds for watch mode")
-    parser.add_argument("--background", action="store_true", help="Start GUI in background (default behavior)")
-    args, _ = parser.parse_known_args()
+    # If running from a console (not frozen build), relaunch via pythonw.exe
+    # in detached mode to continue running after terminal closes.
+    try:
+        if not getattr(sys, 'frozen', False):
+            is_tty = False
+            try:
+                is_tty = sys.stdin.isatty()
+            except Exception:
+                is_tty = False
+            if is_tty:
+                pyw = Path(sys.executable).with_name('pythonw.exe')
+                if pyw.exists():
+                    DETACHED_PROCESS = 0x00000008
+                    CREATE_NEW_PROCESS_GROUP = 0x00000200
+                    cmd = [str(pyw), str(Path(__file__).resolve())]
+                    try:
+                        subprocess.Popen(cmd, creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, close_fds=True)
+                        sys.exit(0)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
 
-    if args.block_browsers_once or args.block_browsers_watch:
-        run_browser_blocker_cli(watch=args.block_browsers_watch, interval=args.interval)
-        sys.exit(0)
-
-    # Default: start the desktop app
     app = ExtensionGuardian(background_mode=True)
     app.run()
