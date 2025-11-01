@@ -238,7 +238,63 @@ class PopupManager {
       this.showNotification('Preset saved', 'success');
     });
 
-
+    // Focus Long mode handlers
+    document.getElementById('focusLongToggle').addEventListener('change', async (e) => {
+      const enabled = e.target.checked;
+      document.getElementById('focusLongStatus').textContent = enabled ? 'ON' : 'OFF';
+      
+      await chrome.runtime.sendMessage({
+        action: 'setFocusLongMode',
+        enabled: enabled,
+        topics: focusLongTopics,
+        threshold: parseFloat(document.getElementById('semanticThreshold').value)
+      });
+      
+      if (enabled) {
+        this.showNotification('Focus Long mode enabled - only study-related content will be allowed', 'success');
+      } else {
+        this.showNotification('Focus Long mode disabled', 'info');
+      }
+    });
+    
+    // Add topic
+    document.getElementById('addFocusLongTopic').addEventListener('click', () => {
+      const input = document.getElementById('focusLongTopic');
+      const topic = input.value.trim();
+      
+      if (topic && !focusLongTopics.includes(topic)) {
+        focusLongTopics.push(topic);
+        updateFocusLongTopicsList();
+        input.value = '';
+      }
+    });
+    
+    // Save Focus Long settings
+    document.getElementById('saveFocusLongSettings').addEventListener('click', async () => {
+      const enabled = document.getElementById('focusLongToggle').checked;
+      const threshold = parseFloat(document.getElementById('semanticThreshold').value);
+      
+      await chrome.runtime.sendMessage({
+        action: 'setFocusLongMode',
+        enabled: enabled,
+        topics: focusLongTopics,
+        threshold: threshold
+      });
+      
+      this.showNotification('Focus Long settings saved!', 'success');
+    });
+    
+    // Clear topics
+    document.getElementById('clearFocusLongTopics').addEventListener('click', () => {
+      focusLongTopics = [];
+      updateFocusLongTopicsList();
+      this.showNotification('All topics cleared', 'info');
+    });
+    
+    // Threshold slider
+    document.getElementById('semanticThreshold').addEventListener('input', (e) => {
+      document.getElementById('thresholdValue').textContent = e.target.value;
+    });
 
     // Add event delegation for dynamically created elements
     this.addDynamicEventListeners();
@@ -569,10 +625,6 @@ class PopupManager {
     this.renderPresets();
   }
 
-
-
-
-
   renderHistory() {
     const list = document.getElementById('historyList');
     if (!list) return;
@@ -891,8 +943,6 @@ class PopupManager {
     });
   }
 
-
-
   // Add event delegation for all dynamically created elements
   addDynamicEventListeners() {
     // Handle site removal buttons (blocked/allowed sites)
@@ -1057,8 +1107,53 @@ class PopupManager {
 }
 
 // Initialize popup manager when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async function() {
+  let focusLongTopics = [];
   window.popupManager = new PopupManager();
+  
+  async function initializeFocusLongMode() {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getFocusLongStatus' });
+      if (response) {
+        document.getElementById('focusLongToggle').checked = response.enabled;
+        document.getElementById('focusLongStatus').textContent = response.enabled ? 'ON' : 'OFF';
+        focusLongTopics = response.topics || [];
+        document.getElementById('semanticThreshold').value = response.threshold || 0.7;
+        document.getElementById('thresholdValue').textContent = response.threshold || 0.7;
+        updateFocusLongTopicsList();
+      }
+    } catch (error) {
+      console.error('Error loading Focus Long settings:', error);
+    }
+  }
+
+  function updateFocusLongTopicsList() {
+    const listElement = document.getElementById('focusLongTopicsList');
+    listElement.innerHTML = '';
+    
+    if (focusLongTopics.length === 0) {
+      listElement.innerHTML = '<p class="no-activity">No topics added yet</p>';
+      return;
+    }
+    
+    focusLongTopics.forEach((topic, index) => {
+      const item = document.createElement('div');
+      item.className = 'site-item';
+      item.innerHTML = `
+        <span>🎯 ${topic}</span>
+        <button class="remove-btn" data-index="${index}">×</button>
+      `;
+      listElement.appendChild(item);
+      
+      item.querySelector('.remove-btn').addEventListener('click', (e) => {
+        const idx = parseInt(e.target.dataset.index);
+        focusLongTopics.splice(idx, 1);
+        updateFocusLongTopicsList();
+      });
+    });
+  }
+  
+  initializeFocusLongMode();
 });
 
 // Refresh stats every 30 seconds

@@ -94,17 +94,20 @@ class ContentAnalyzer {
       setTimeout(async () => {
         const contentData = await this.extractContentData();
         
-        // NEW: AGGRESSIVE MOVIE BLOCKING - Check for movie-related content first
+        // ALWAYS check vulgar content first (even during bypass window)
+        const vulgarBlockResult = this.checkForVulgarContent(contentData);
+        if (vulgarBlockResult.shouldBlock) {
+          this.log('🚫 VULGAR CONTENT DETECTED - BLOCKING IMMEDIATELY (always blocked):', vulgarBlockResult);
+          this.blockPage(vulgarBlockResult.reason);
+          return;
+        }
+        
+        // Note: Time-based bypass for movies is handled by background.js
+        // We still check for movie content here for normal operation outside bypass window
         const movieBlockResult = this.checkForMovieContent(contentData);
         if (movieBlockResult.shouldBlock) {
           this.log('🚫 MOVIE CONTENT DETECTED - BLOCKING IMMEDIATELY:', movieBlockResult);
           this.blockPage(movieBlockResult.reason);
-          return;
-        }
-        const vulgarBlockResult = this.checkForVulgarContent(contentData);
-        if (vulgarBlockResult.shouldBlock) {
-          this.log('🚫 VULGAR CONTENT DETECTED - BLOCKING IMMEDIATELY:', vulgarBlockResult);
-          this.blockPage(vulgarBlockResult.reason);
           return;
         }
         

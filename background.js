@@ -1,6 +1,6 @@
 class ProductivityGuardian {
   constructor() {
-    const DEFAULT_ENCODED_KEY = '';
+    const DEFAULT_ENCODED_KEY = 'Z3NrX0NJeXZESXdnOXlGRk56ZlBvM04yV2JUNGZSZnA1ZVQ0MkRoTUJKY0I2TGlWbjlrTFZjbm0=';
     this.groqApiKey = null;
     this.groqApiUrl = 'https://api.groq.com/openai/v1/chat/completions';
     this.isEnabled = true;
@@ -28,6 +28,11 @@ class ProductivityGuardian {
     this.currentSession = null; // { id, name, allowedDomains[], allowedMetadata{topics[]}, maxExtraDomains, endTime }
     this.sessionTimerId = null;
     this.focusLockEndTime = null;
+    
+    // Focus Long mode settings
+    this.focusLongMode = false;
+    this.focusLongTopics = [];
+    this.semanticThreshold = 0.7; // How related content must be (0-1)
 
     this.debugMode = true; // Enable debug mode by default
     this.init();
@@ -66,13 +71,13 @@ class ProductivityGuardian {
     }
   }
 
-  async getAmsterdamHour() {
+  async getAmsterdamTime() {
     // Cache to avoid frequent network calls (5 minutes)
     try {
       const { amsTimeCache } = await chrome.storage.local.get('amsTimeCache');
       if (amsTimeCache && Date.now() - amsTimeCache.timestamp < 5 * 60 * 1000) {
-        this.log(`🌐 Using cached Amsterdam hour: ${amsTimeCache.hour}`);
-        return amsTimeCache.hour;
+        this.log(`🌐 Using cached Amsterdam time: ${amsTimeCache.hour}:${amsTimeCache.minute}`);
+        return { hour: amsTimeCache.hour, minute: amsTimeCache.minute };
       }
     } catch {}
 
@@ -89,14 +94,19 @@ class ProductivityGuardian {
       }
     };
 
-    // Providers (in priority order), each returns hour in 0-23
+    // Providers (in priority order), each returns {hour, minute}
     const providers = [
       {
         name: 'timeapi.io',
         fn: async () => {
           const j = await fetchJSON('https://timeapi.io/api/Time/current/zone?timeZone=Europe/Amsterdam');
-          if (j && typeof j.hour === 'number') return j.hour;
-          if (j && j.dateTime) return new Date(j.dateTime).getHours();
+          if (j && typeof j.hour === 'number' && typeof j.minute === 'number') {
+            return { hour: j.hour, minute: j.minute };
+          }
+          if (j && j.dateTime) {
+            const d = new Date(j.dateTime);
+            return { hour: d.getHours(), minute: d.getMinutes() };
+          }
           throw new Error('invalid response');
         }
       },
@@ -104,8 +114,14 @@ class ProductivityGuardian {
         name: 'worldtimeapi',
         fn: async () => {
           const j = await fetchJSON('https://worldtimeapi.org/api/timezone/Europe/Amsterdam');
-          if (j && j.datetime) return new Date(j.datetime).getHours();
-          if (typeof j.unixtime === 'number') return new Date(j.unixtime * 1000).getUTCHours();
+          if (j && j.datetime) {
+            const d = new Date(j.datetime);
+            return { hour: d.getHours(), minute: d.getMinutes() };
+          }
+          if (typeof j.unixtime === 'number') {
+            const d = new Date(j.unixtime * 1000);
+            return { hour: d.getUTCHours(), minute: d.getUTCMinutes() };
+          }
           throw new Error('invalid response');
         }
       },
@@ -116,8 +132,14 @@ class ProductivityGuardian {
           const ts = j && j.data && j.data.date && (j.data.date.timestamp || j.data.date.gregorian?.timestamp);
           if (ts) {
             const d = new Date(parseInt(ts, 10) * 1000);
-            const fmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Europe/Amsterdam' });
-            return parseInt(fmt.format(d), 10);
+            const fmt = new Intl.DateTimeFormat('en-GB', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              hour12: false, 
+              timeZone: 'Europe/Amsterdam' 
+            });
+            const parts = fmt.format(d).split(':');
+            return { hour: parseInt(parts[0], 10), minute: parseInt(parts[1], 10) };
           }
           throw new Error('invalid response');
         }
@@ -126,29 +148,55 @@ class ProductivityGuardian {
 
     for (const p of providers) {
       try {
-        const hour = await p.fn();
+        const time = await p.fn();
         // Cache result
-        try { await chrome.storage.local.set({ amsTimeCache: { hour, timestamp: Date.now() } }); } catch {}
-        this.log(`🌍 Amsterdam hour from ${p.name}: ${hour}`);
-        return hour;
+        try { await chrome.storage.local.set({ amsTimeCache: { hour: time.hour, minute: time.minute, timestamp: Date.now() } }); } catch {}
+        this.log(`🌍 Amsterdam time from ${p.name}: ${time.hour}:${String(time.minute).padStart(2, '0')}`);
+        return time;
       } catch (e) {
         this.log(`⏭️ Time provider failed (${p.name}), trying next...`, String(e));
       }
     }
 
-    // Last resort: derive Amsterdam hour from system UTC (still better than raw local time)
+    // Last resort: derive Amsterdam time from system UTC (still better than raw local time)
     try {
       const now = new Date();
       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
       // Compute Amsterdam offset using IANA rules via Intl
-      const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Amsterdam', hour: '2-digit', hour12: false });
-      const hour = parseInt(fmt.format(new Date(utc)), 10);
-      this.log(`🕒 Fallback Amsterdam hour via Intl: ${hour}`);
-      return hour;
+      const fmt = new Intl.DateTimeFormat('en-GB', { 
+        timeZone: 'Europe/Amsterdam', 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+      });
+      const parts = fmt.format(new Date(utc)).split(':');
+      const hour = parseInt(parts[0], 10);
+      const minute = parseInt(parts[1], 10);
+      this.log(`🕒 Fallback Amsterdam time via Intl: ${hour}:${String(minute).padStart(2, '0')}`);
+      return { hour, minute };
     } catch {
-      // Absolute fallback: local hour
-      return new Date().getHours();
+      // Absolute fallback: local time
+      const now = new Date();
+      return { hour: now.getHours(), minute: now.getMinutes() };
     }
+  }
+
+  // Helper method to check if current Amsterdam time is in bypass window (3:30 AM - 6:00 AM)
+  async isInTimeBypassWindow() {
+    const time = await this.getAmsterdamTime();
+    const hour = time.hour;
+    const minute = time.minute;
+    
+    // Convert to minutes since midnight for easier comparison
+    const currentMinutes = hour * 60 + minute;
+    const startMinutes = 3 * 60 + 30; // 3:30 AM = 210 minutes
+    const endMinutes = 6 * 60; // 6:00 AM = 360 minutes
+    
+    const inWindow = currentMinutes >= startMinutes && currentMinutes < endMinutes;
+    
+    this.log(`⏱️ Time check (Amsterdam): ${hour}:${String(minute).padStart(2, '0')} -> ${inWindow ? 'BYPASS WINDOW' : 'RESTRICT'}`);
+    
+    return inWindow;
   }
 
   async evaluateJustification(text) {
@@ -179,7 +227,7 @@ class ProductivityGuardian {
 
   async init() {
     // Load settings from storage
-    const result = await chrome.storage.sync.get(['groqApiKey', 'isEnabled', 'blockedSites', 'allowedSites', 'focusMode', 'allowedMetadata', 'focusLock', 'focusLockEndTime', 'currentSession']);
+    const result = await chrome.storage.sync.get(['groqApiKey', 'isEnabled', 'blockedSites', 'allowedSites', 'focusMode', 'allowedMetadata', 'focusLock', 'focusLockEndTime', 'currentSession', 'focusLongMode', 'focusLongTopics', 'semanticThreshold']);
     if (result.groqApiKey) this.groqApiKey = result.groqApiKey;
     if (!this.groqApiKey && typeof DEFAULT_ENCODED_KEY === 'string' && DEFAULT_ENCODED_KEY.length > 0) {
       try { this.groqApiKey = atob(DEFAULT_ENCODED_KEY); } catch {}
@@ -191,6 +239,11 @@ class ProductivityGuardian {
     if (result.allowedMetadata) this.allowedMetadata = result.allowedMetadata;
     this.focusLock = !!result.focusLock;
     if (result.focusLockEndTime) this.focusLockEndTime = result.focusLockEndTime;
+    
+    // Load Focus Long settings
+    if (result.focusLongMode !== undefined) this.focusLongMode = result.focusLongMode;
+    if (result.focusLongTopics) this.focusLongTopics = result.focusLongTopics;
+    if (result.semanticThreshold) this.semanticThreshold = result.semanticThreshold;
 
     if (result.currentSession) {
       this.currentSession = result.currentSession;
@@ -241,12 +294,25 @@ class ProductivityGuardian {
     // Handle messages from content script
     chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       try {
-        // Check if current Amsterdam time is between 3 AM and 6 AM - disable all restrictions
-        const currentHour = await this.getAmsterdamHour();
-        this.log(`⏱️ Time check (Amsterdam): hour=${currentHour} -> ${currentHour >= 3 && currentHour < 6 ? 'BYPASS' : 'RESTRICT'}`);
-        if (currentHour >= 3 && currentHour < 6) {
-          this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
-          sendResponse({ shouldBlock: false, reason: 'Time-based bypass (3 AM - 6 AM)', bypassExtension: true });
+        // Check if current Amsterdam time is between 3:30 AM and 6:00 AM
+        const inBypassWindow = await this.isInTimeBypassWindow();
+        
+        // During bypass window, check for vulgar content but allow everything else
+        if (inBypassWindow) {
+          // Still check for vulgar content even during bypass window
+          if (sender?.tab?.url) {
+            const url = sender.tab.url;
+            const hostname = new URL(url).hostname;
+            const vulgarCheck = this.checkUrlForVulgarContent(url, hostname);
+            if (vulgarCheck.shouldBlock) {
+              this.log('🚫 VULGAR CONTENT BLOCKED during bypass window:', vulgarCheck);
+              sendResponse({ shouldBlock: true, reason: vulgarCheck.reason });
+              return true;
+            }
+          }
+          
+          this.log('🕒 Time-based bypass: Current time is 3:30 AM - 6:00 AM - allowing all non-vulgar content');
+          sendResponse({ shouldBlock: false, reason: 'Time-based bypass (3:30 AM - 6:00 AM)', bypassExtension: true });
           return true;
         }
         
@@ -318,6 +384,51 @@ class ProductivityGuardian {
           }
           
           sendResponse({ status: 'ok', timestamp: Date.now() });
+        } else if (request.action === 'setFocusLongMode') {
+          // Handle Focus Long mode settings
+          this.focusLongMode = request.enabled;
+          this.focusLongTopics = request.topics || [];
+          this.semanticThreshold = request.threshold || 0.7;
+          
+          await chrome.storage.sync.set({
+            focusLongMode: this.focusLongMode,
+            focusLongTopics: this.focusLongTopics,
+            semanticThreshold: this.semanticThreshold
+          });
+          
+          this.log('📚 Focus Long mode updated:', {
+            enabled: this.focusLongMode,
+            topics: this.focusLongTopics,
+            threshold: this.semanticThreshold
+          });
+          
+          sendResponse({ success: true });
+        } else if (request.action === 'getFocusLongStatus') {
+          sendResponse({
+            enabled: this.focusLongMode,
+            topics: this.focusLongTopics,
+            threshold: this.semanticThreshold
+          });
+        } else if (request.action === 'analyzeChatQuery') {
+          // Analyze chat query for relevance
+          const analysis = await this.analyzeChatQuery(
+            request.query,
+            request.topics || this.focusLongTopics,
+            request.threshold || this.semanticThreshold
+          );
+          sendResponse(analysis);
+        } else if (request.action === 'evaluateUnblockRequest') {
+          // Evaluate unblock justification
+          const approved = await this.evaluateJustification(request.justification);
+          sendResponse({ approved });
+        } else if (request.action === 'logQueryOverride') {
+          // Log override for review
+          await this.logChatOverride(request.query, request.justification, request.platform);
+          sendResponse({ success: true });
+        } else if (request.action === 'chatMonitorLog') {
+          // Log from chat monitor
+          this.log(`[${request.platform}] ${request.message}`, request.data);
+          sendResponse({ success: true });
         } else if (request.action === 'getDisabledStatus') {
           // Get current disabled status
           try {
@@ -339,6 +450,181 @@ class ProductivityGuardian {
     });
 
 
+  }
+
+  // Analyze chat query for relevance to study topics
+  async analyzeChatQuery(query, topics, threshold) {
+    if (!this.groqApiKey || !this.apiWorking) {
+      this.log('⚠️ Cannot analyze chat query - API not available');
+      return { relevant: true, score: 1, reason: 'API not available - allowing' };
+    }
+    
+    if (!topics || topics.length === 0) {
+      return { relevant: true, score: 1, reason: 'No topics specified' };
+    }
+    
+    try {
+      const prompt = `You are monitoring a student's chat queries to ensure they stay focused on studying.
+
+Study Topics:
+${topics.map(t => `- ${t}`).join('\n')}
+
+User's Query:
+"${query}"
+
+Analyze if this query is:
+1. STUDY RELATED - Directly about the study topics, asking for help, clarification, examples
+2. SOMEWHAT RELATED - Tangentially related, could be justified for learning
+3. OFF-TOPIC - Entertainment, personal chat, procrastination, unrelated to studies
+
+Be strict but fair. Programming jokes or brief social pleasantries are OK if the main query is study-related.
+
+Respond in JSON:
+{
+  "relevant": true/false,
+  "score": 0.0-1.0,
+  "category": "STUDY"/"SOMEWHAT"/"OFF-TOPIC",
+  "reason": "Brief explanation"
+}`;
+      
+      const response = await fetch(this.groqApiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.groqApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama3-8b-8192',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 150,
+          temperature: 0.3,
+          response_format: { type: "json_object" }
+        })
+      });
+      
+      if (!response.ok) {
+        this.log('❌ Chat query analysis API error:', response.status);
+        return { relevant: true, score: 1, reason: 'API error - allowing' };
+      }
+      
+      const data = await response.json();
+      const result = JSON.parse(data.choices[0]?.message?.content || '{}');
+      
+      this.log('💬 Chat query analysis:', { query: query.substring(0, 50), result });
+      
+      // Check if score meets threshold
+      const meetsThreshold = result.score >= threshold;
+      
+      return {
+        relevant: result.relevant && meetsThreshold,
+        score: result.score || 0,
+        category: result.category || 'UNKNOWN',
+        reason: result.reason || 'No reason provided'
+      };
+    } catch (error) {
+      this.log('❌ Chat query analysis error:', error.message);
+      return { relevant: true, score: 1, reason: 'Analysis failed - allowing' };
+    }
+  }
+  
+  // Log chat override for dashboard review
+  async logChatOverride(query, justification, platform) {
+    try {
+      const { chatOverrides } = await chrome.storage.local.get(['chatOverrides']);
+      const overrides = chatOverrides || [];
+      
+      overrides.push({
+        query,
+        justification,
+        platform,
+        timestamp: Date.now()
+      });
+      
+      // Keep last 50 overrides
+      if (overrides.length > 50) {
+        overrides.splice(0, overrides.length - 50);
+      }
+      
+      await chrome.storage.local.set({ chatOverrides: overrides });
+      this.log('📝 Logged chat override:', { platform, query: query.substring(0, 50) });
+    } catch (error) {
+      this.log('❌ Error logging override:', error);
+    }
+  }
+
+  // Semantic analysis for Focus Long mode
+  async analyzeSemanticRelevance(url, title, content, topics) {
+    if (!this.groqApiKey || !this.apiWorking) {
+      this.log('⚠️ Cannot perform semantic analysis - API not available');
+      return { relevant: false, score: 0, reason: 'API not available' };
+    }
+    
+    if (!topics || topics.length === 0) {
+      return { relevant: true, score: 1, reason: 'No topics specified' };
+    }
+    
+    try {
+      const prompt = `You are an educational content analyzer. Analyze if this webpage is relevant for studying the following topics.
+
+Study Topics:
+${topics.map(t => `- ${t}`).join('\n')}
+
+Webpage Information:
+URL: ${url}
+Title: ${title}
+Content Preview: ${content?.substring(0, 500) || 'No content available'}
+
+Determine if this webpage is:
+1. DIRECTLY RELEVANT - Contains educational content about the topics (tutorials, documentation, courses, research)
+2. SUPPORT RELEVANT - Useful support tools (AI models, Canvas, educational platforms, Q&A sites about the topics)
+3. NOT RELEVANT - Entertainment, social media, or unrelated content
+
+Respond in JSON format:
+{
+  "relevant": true/false,
+  "score": 0.0-1.0,
+  "category": "DIRECT"/"SUPPORT"/"NOT_RELEVANT",
+  "reason": "Brief explanation"
+}`;
+      
+      const response = await fetch(this.groqApiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.groqApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama3-8b-8192',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 150,
+          temperature: 0.3,
+          response_format: { type: "json_object" }
+        })
+      });
+      
+      if (!response.ok) {
+        this.log('❌ Semantic analysis API error:', response.status);
+        return { relevant: false, score: 0, reason: 'API error' };
+      }
+      
+      const data = await response.json();
+      const result = JSON.parse(data.choices[0]?.message?.content || '{}');
+      
+      this.log('🧠 Semantic analysis result:', result);
+      
+      // Check if score meets threshold
+      const meetsThreshold = result.score >= this.semanticThreshold;
+      
+      return {
+        relevant: result.relevant && meetsThreshold,
+        score: result.score || 0,
+        category: result.category || 'UNKNOWN',
+        reason: result.reason || 'No reason provided'
+      };
+    } catch (error) {
+      this.log('❌ Semantic analysis error:', error.message);
+      return { relevant: false, score: 0, reason: 'Analysis failed' };
+    }
   }
 
   async checkApiConnection() {
@@ -382,11 +668,20 @@ class ProductivityGuardian {
       this.log('🔍 AI Productivity Guardian - Analyzing URL');
       this.log('📍 URL:', url);
       
-      // Check if current Amsterdam time is between 3 AM and 6 AM - disable all restrictions
-      const currentHour = await this.getAmsterdamHour();
-      this.log(`⏱️ Time check (Amsterdam): hour=${currentHour} -> ${currentHour >= 3 && currentHour < 6 ? 'BYPASS' : 'RESTRICT'}`);
-      if (currentHour >= 3 && currentHour < 6) {
-        this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
+      // Check if current Amsterdam time is between 3:30 AM and 6:00 AM
+      const inBypassWindow = await this.isInTimeBypassWindow();
+      
+      if (inBypassWindow) {
+        // Still check for vulgar content even during bypass window
+        const hostname = new URL(url).hostname;
+        const vulgarCheck = this.checkUrlForVulgarContent(url, hostname);
+        if (vulgarCheck.shouldBlock) {
+          this.log('🚫 VULGAR CONTENT BLOCKED during bypass window:', vulgarCheck);
+          await this.blockTab(tabId, hostname, vulgarCheck.reason);
+          return;
+        }
+        
+        this.log('🕒 Time-based bypass: Current time is 3:30 AM - 6:00 AM - allowing all non-vulgar sites');
         return;
       }
       
@@ -394,6 +689,34 @@ class ProductivityGuardian {
       if (url.includes('tue.video.yuja.com')) {
         this.log('🎥 Yuja platform detected - completely bypassing extension functionality');
         return;
+      }
+      
+      // Focus Long mode - semantic topic filtering
+      if (this.focusLongMode && this.focusLongTopics.length > 0) {
+        this.log('📚 Focus Long mode active - performing semantic analysis');
+        this.log('🎯 Study topics:', this.focusLongTopics);
+        
+        // Get page title for better context
+        let pageTitle = '';
+        try {
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (tab) pageTitle = tab.title || '';
+        } catch {}
+        
+        const semanticResult = await this.analyzeSemanticRelevance(
+          url,
+          pageTitle,
+          '', // Content will be analyzed later if needed
+          this.focusLongTopics
+        );
+        
+        if (!semanticResult.relevant) {
+          this.log('🚫 BLOCKING: Content not relevant to study topics', semanticResult);
+          await this.blockTab(tabId, hostname, `Focus Long: ${semanticResult.reason}`);
+          return;
+        } else {
+          this.log('✅ ALLOWED: Content relevant to study topics', semanticResult);
+        }
       }
       
       // Skip chrome:// and extension pages
@@ -520,11 +843,17 @@ class ProductivityGuardian {
 
   async analyzeUrlWithAI(url, hostname) {
     try {
-      // Check if current Amsterdam time is between 3 AM and 6 AM - disable all restrictions
-      const currentHour = await this.getAmsterdamHour();
-      this.log(`⏱️ Time check (Amsterdam): hour=${currentHour} -> ${currentHour >= 3 && currentHour < 6 ? 'BYPASS' : 'RESTRICT'}`);
-      if (currentHour >= 3 && currentHour < 6) {
-        this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
+      // ALWAYS check for vulgar content first (even during bypass window)
+      const vulgarBlockResult = this.checkUrlForVulgarContent(url, hostname);
+      if (vulgarBlockResult.shouldBlock) {
+        this.log('🚫 VULGAR CONTENT DETECTED IN URL - BLOCKING IMMEDIATELY:', vulgarBlockResult);
+        return true; // Block the site
+      }
+      
+      // Check if current Amsterdam time is between 3:30 AM and 6:00 AM
+      const inBypassWindow = await this.isInTimeBypassWindow();
+      if (inBypassWindow) {
+        this.log('🕒 Time-based bypass: Current time is 3:30 AM - 6:00 AM - allowing non-vulgar site');
         return false; // Allow the site
       }
       
@@ -532,13 +861,6 @@ class ProductivityGuardian {
       const movieBlockResult = this.checkUrlForMovieContent(url, hostname);
       if (movieBlockResult.shouldBlock) {
         this.log('🚫 MOVIE CONTENT DETECTED IN URL - BLOCKING IMMEDIATELY:', movieBlockResult);
-        return true; // Block the site
-      }
-
-      // NEW: Aggressive vulgar content detection before AI analysis
-      const vulgarBlockResult = this.checkUrlForVulgarContent(url, hostname);
-      if (vulgarBlockResult.shouldBlock) {
-        this.log('🚫 VULGAR CONTENT DETECTED IN URL - BLOCKING IMMEDIATELY:', vulgarBlockResult);
         return true; // Block the site
       }
 
@@ -745,16 +1067,41 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
   }
 
   async analyzeContentWithAI(contentData) {
-    // Check if current Amsterdam time is between 3 AM and 6 AM - disable all restrictions
-    const currentHour = await this.getAmsterdamHour();
-    this.log(`⏱️ Time check (Amsterdam): hour=${currentHour} -> ${currentHour >= 3 && currentHour < 6 ? 'BYPASS' : 'RESTRICT'}`);
-    if (currentHour >= 3 && currentHour < 6) {
-      this.log('🕒 Time-based bypass: Current time is between 3 AM and 6 AM - all sites allowed');
-      return { shouldBlock: false, reason: 'Time-based bypass (3 AM - 6 AM)' };
+    // Check if current Amsterdam time is between 3:30 AM and 6:00 AM
+    const inBypassWindow = await this.isInTimeBypassWindow();
+    if (inBypassWindow) {
+      this.log('🕒 Time-based bypass: Current time is 3:30 AM - 6:00 AM - allowing all non-vulgar content');
+      return { shouldBlock: false, reason: 'Time-based bypass (3:30 AM - 6:00 AM)' };
     }
     
     if (!this.groqApiKey) return { shouldBlock: false, reason: 'No API key' };
     if (!this.apiWorking) return { shouldBlock: false, reason: 'API not working' };
+    
+    // Focus Long mode - semantic content analysis
+    if (this.focusLongMode && this.focusLongTopics.length > 0) {
+      this.log('📚 Focus Long mode - analyzing content relevance');
+      
+      const semanticResult = await this.analyzeSemanticRelevance(
+        contentData.url,
+        contentData.title,
+        contentData.textContent,
+        this.focusLongTopics
+      );
+      
+      if (!semanticResult.relevant) {
+        this.log('🚫 Content not relevant to study topics:', semanticResult);
+        return {
+          shouldBlock: true,
+          reason: `Focus Long: ${semanticResult.reason} (score: ${semanticResult.score.toFixed(2)})`
+        };
+      } else {
+        this.log('✅ Content relevant to study topics:', semanticResult);
+        return {
+          shouldBlock: false,
+          reason: `Focus Long: ${semanticResult.reason} (score: ${semanticResult.score.toFixed(2)})`
+        };
+      }
+    }
 
     // Store debug log for content analysis
     await this.storeDebugLog(contentData.url || 'unknown', 'Content analysis', 'analyzed', contentData);

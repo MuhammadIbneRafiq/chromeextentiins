@@ -98,6 +98,35 @@
         </div>
 
         <div class="section">
+            <h3>📚 Focus Long Mode (Topic-Based Study)</h3>
+            <div class="toggle-group">
+                <label for="focusLongToggle">Enable Focus Long Mode:</label>
+                <input type="checkbox" id="focusLongToggle">
+                <span class="toggle-label" id="focusLongStatus">OFF</span>
+            </div>
+            <p class="help-text">AI-powered mode that only allows content related to your study topics</p>
+            
+            <div class="input-group">
+                <input type="text" id="focusLongTopic" placeholder="e.g., Data Mining, Machine Learning, Python">
+                <button id="addFocusLongTopic" class="btn-secondary">Add Topic</button>
+            </div>
+            
+            <div class="site-list" id="focusLongTopicsList"></div>
+            
+            <div class="input-group">
+                <label for="semanticThreshold">Relevance Threshold:</label>
+                <input type="range" id="semanticThreshold" min="0.3" max="0.9" step="0.1" value="0.7">
+                <span id="thresholdValue">0.7</span>
+            </div>
+            <p class="help-text">Higher = stricter filtering (0.7 recommended)</p>
+            
+            <div class="quick-actions">
+                <button id="saveFocusLongSettings" class="btn-primary">Save Focus Long Settings</button>
+                <button id="clearFocusLongTopics" class="btn-danger">Clear All Topics</button>
+            </div>
+        </div>
+
+        <div class="section">
             <h3>🚫 Blocked Sites (Manual)</h3>
             <div class="input-group">
                 <input type="text" id="newBlockedSite" placeholder="e.g., youtube.com">

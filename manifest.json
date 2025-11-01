@@ -33,6 +33,18 @@
       "exclude_matches": ["*://tue.video.yuja.com/*"],
       "js": ["content.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://www.perplexity.ai/*",
+        "https://poe.com/*",
+        "https://bard.google.com/*",
+        "https://gemini.google.com/*"
+      ],
+      "js": ["chat_monitor.js"],
+      "run_at": "document_idle"
     }
   ],
   
