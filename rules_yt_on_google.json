@@ -4,7 +4,7 @@
     "priority": 1,
     "action": { "type": "block" },
     "condition": {
-      "initiatorDomains": ["www.google.com", "google.com"],
+      "initiatorDomains": ["www.google.com", "google.com", "perplexity.ai", "www.perplexity.ai"],
       "requestDomains": [
         "www.youtube.com",
         "youtube.com",

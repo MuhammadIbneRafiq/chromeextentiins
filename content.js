@@ -114,6 +114,9 @@ class ContentAnalyzer {
 
       // Apply inline YouTube block on Google Search (videos tab and SERP inline players)
       this.blockInlineYouTubeOnGoogle();
+      
+      // Apply inline YouTube block on Perplexity Search
+      this.blockInlineYouTubeOnPerplexity();
 
       // Wait a bit for content to load
       setTimeout(async () => {
@@ -531,7 +534,62 @@ class ContentAnalyzer {
     }
   }
 
+  blockInlineYouTubeOnPerplexity() {
+    try {
+      const isPerplexity = /perplexity\.ai$/.test(location.hostname);
+      if (!isPerplexity) return;
 
+      this.log('🔍 Perplexity Search Detected - Applying YouTube Blocking');
+
+      const nuke = () => {
+        // Remove YouTube iframes and embeds
+        document.querySelectorAll('iframe[src*="youtube.com"], iframe[src*="youtu.be"]').forEach(el => {
+          el.remove();
+        });
+
+        // Hide YouTube video cards in search results
+        document.querySelectorAll('[href*="youtube.com"], [href*="youtu.be"]').forEach(link => {
+          // Find the parent card/container element
+          let parent = link.closest('div[class*="card"], div[class*="result"], article, section');
+          if (!parent) {
+            // If no specific card found, try to find the nearest meaningful container
+            parent = link.parentElement;
+            while (parent && parent.parentElement && parent.parentElement.tagName !== 'BODY') {
+              // Look for a container that seems to be a result item
+              if (parent.children.length > 1 || parent.querySelector('img, video')) {
+                break;
+              }
+              parent = parent.parentElement;
+            }
+          }
+          if (parent) {
+            parent.style.display = 'none';
+            this.log('🚫 Hidden YouTube result on Perplexity');
+          }
+        });
+
+        // Also remove any video elements that might be YouTube related
+        document.querySelectorAll('video[src*="youtube"], video[src*="youtu.be"]').forEach(el => {
+          el.remove();
+        });
+
+        // Remove YouTube thumbnails
+        document.querySelectorAll('img[src*="ytimg.com"], img[src*="youtube.com"], img[src*="youtu.be"]').forEach(img => {
+          const parent = img.closest('div[class*="card"], div[class*="result"], article, section') || img.parentElement;
+          if (parent) {
+            parent.style.display = 'none';
+          }
+        });
+      };
+
+      // Initial pass and observe mutations
+      nuke();
+      const obs = new MutationObserver(() => nuke());
+      obs.observe(document.documentElement, { childList: true, subtree: true });
+    } catch (e) {
+      this.log('⚠️ Error blocking YouTube on Perplexity:', e);
+    }
+  }
 
   isSocialMediaSite() {
     const socialKeywords = [
