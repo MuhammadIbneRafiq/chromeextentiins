@@ -736,8 +736,7 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
     // Comprehensive list of vulgar/inappropriate keywords and patterns
     const vulgarKeywords = [
       // Explicit vulgar terms (exact matches)
-      'fuck', 'shit', 'pussy', 'dick', 'cunt', 'asshole', 'bitch', 'slut',
-      'nigga', 'nigger', 'whore', 'hoe', 'cock', 'penis', 'vagina',
+      'fuck', 'pussy', 'vagina',
       
       // Adult content terms (exact matches)
       'porn', 'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn',

@@ -42,12 +42,8 @@ class ContentAnalyzer {
     } else {
       this.analyzeContent();
     }
-
-    // Set up debug message listener
-    this.setupDebugListener();
     
-    // Log initialization
-    this.log('🚀 Content Analyzer initialized');
+    this.setupDebugListener();
   }
 
   // Enhanced logging that will be visible in regular console
