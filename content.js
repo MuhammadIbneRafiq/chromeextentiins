@@ -1,3 +1,66 @@
+// Immediate execution BEFORE ContentAnalyzer construction
+console.log('[AI Guardian] Content script loaded on:', location.href);
+console.log('[AI Guardian] Hostname:', location.hostname);
+console.log('[AI Guardian] User Agent:', navigator.userAgent);
+
+// IMMEDIATE YouTube blocking on Perplexity/Comet (runs before class init)
+(function() {
+  const isPerplexity = /perplexity\.ai/.test(location.hostname) || 
+                       location.hostname.includes('perplexity') ||
+                       /comet/i.test(navigator.userAgent) ||
+                       /perplexity/i.test(navigator.userAgent);
+  
+  console.log('[AI Guardian] Perplexity/Comet detection (immediate):', isPerplexity);
+  
+  if (isPerplexity) {
+    console.log('[AI Guardian] ✅ PERPLEXITY/COMET DETECTED - Starting immediate YouTube blocking');
+    
+    const blockYouTube = () => {
+      let count = 0;
+      document.querySelectorAll('iframe[src*="youtube.com"], iframe[src*="youtu.be"]').forEach(el => {
+        el.remove();
+        count++;
+      });
+      document.querySelectorAll('[href*="youtube.com"], [href*="youtu.be"]').forEach(link => {
+        let parent = link.closest('div[class*="card"], div[class*="result"], article, section') || link.parentElement;
+        if (parent && parent.style.display !== 'none') {
+          parent.style.display = 'none';
+          count++;
+        }
+      });
+      document.querySelectorAll('img[src*="ytimg.com"], img[src*="youtube.com"], img[src*="youtu.be"]').forEach(img => {
+        let parent = img.closest('div[class*="card"], div[class*="result"], article, section') || img.parentElement;
+        if (parent && parent.style.display !== 'none') {
+          parent.style.display = 'none';
+          count++;
+        }
+      });
+      if (count > 0) console.log(`[AI Guardian] 🚫 Blocked ${count} YouTube elements (immediate pass)`);
+    };
+    
+    // Multiple passes
+    blockYouTube();
+    setTimeout(blockYouTube, 100);
+    setTimeout(blockYouTube, 500);
+    setTimeout(blockYouTube, 1000);
+    setTimeout(blockYouTube, 2000);
+    
+    // Continuous observation
+    if (document.documentElement) {
+      const obs = new MutationObserver(blockYouTube);
+      obs.observe(document.documentElement, { childList: true, subtree: true });
+    } else {
+      // If documentElement not ready, wait and try again
+      setTimeout(() => {
+        if (document.documentElement) {
+          const obs = new MutationObserver(blockYouTube);
+          obs.observe(document.documentElement, { childList: true, subtree: true });
+        }
+      }, 100);
+    }
+  }
+})();
+
 class ContentAnalyzer {
   constructor() {
     this.analyzed = false;
@@ -36,25 +99,24 @@ class ContentAnalyzer {
   }
 
   async init() {
+    // IMMEDIATELY block YouTube on Perplexity/Comet BEFORE anything else
+    this.blockInlineYouTubeOnPerplexity();
+    
     // Wait for DOM to be ready
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => this.analyzeContent());
     } else {
       this.analyzeContent();
     }
-    
+
     this.setupDebugListener();
   }
 
-  // Enhanced logging that will be visible in regular console
   log(message, data = null) {
     const timestamp = new Date().toLocaleTimeString();
     const logMessage = `[AI Guardian ${timestamp}] ${message}`;
-    
-    // Content script console (blocked page)
     console.log(logMessage, data || '');
     
-    // Also log to regular browser console for visibility
     if (window.console && window.console.log) {
       console.log(`%c${logMessage}`, 'background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold;', data || '');
     }
@@ -532,15 +594,32 @@ class ContentAnalyzer {
 
   blockInlineYouTubeOnPerplexity() {
     try {
-      const isPerplexity = /perplexity\.ai$/.test(location.hostname);
+      // Log detection attempt
+      this.log('🔍 Checking for Perplexity/Comet...', {
+        hostname: location.hostname,
+        userAgent: navigator.userAgent,
+        href: location.href
+      });
+      
+      // Check for Perplexity (works in all browsers including Comet)
+      const isPerplexity = /perplexity\.ai/.test(location.hostname) || 
+                          location.hostname.includes('perplexity') ||
+                          /comet/i.test(navigator.userAgent) || // Comet browser
+                          /perplexity/i.test(navigator.userAgent); // Perplexity in UA
+      
+      this.log('🔍 Detection result:', isPerplexity ? '✅ PERPLEXITY/COMET DETECTED' : '❌ Not Perplexity/Comet');
+      
       if (!isPerplexity) return;
 
-      this.log('🔍 Perplexity Search Detected - Applying YouTube Blocking');
+      this.log('🔍 Perplexity Search Detected (including Comet browser) - Applying YouTube Blocking');
 
       const nuke = () => {
+        let blockedCount = 0;
+        
         // Remove YouTube iframes and embeds
         document.querySelectorAll('iframe[src*="youtube.com"], iframe[src*="youtu.be"]').forEach(el => {
           el.remove();
+          blockedCount++;
         });
 
         // Hide YouTube video cards in search results
@@ -558,8 +637,9 @@ class ContentAnalyzer {
               parent = parent.parentElement;
             }
           }
-          if (parent) {
+          if (parent && parent.style.display !== 'none') {
             parent.style.display = 'none';
+            blockedCount++;
             this.log('🚫 Hidden YouTube result on Perplexity');
           }
         });
@@ -567,19 +647,30 @@ class ContentAnalyzer {
         // Also remove any video elements that might be YouTube related
         document.querySelectorAll('video[src*="youtube"], video[src*="youtu.be"]').forEach(el => {
           el.remove();
+          blockedCount++;
         });
 
         // Remove YouTube thumbnails
         document.querySelectorAll('img[src*="ytimg.com"], img[src*="youtube.com"], img[src*="youtu.be"]').forEach(img => {
           const parent = img.closest('div[class*="card"], div[class*="result"], article, section') || img.parentElement;
-          if (parent) {
+          if (parent && parent.style.display !== 'none') {
             parent.style.display = 'none';
+            blockedCount++;
           }
         });
+        
+        if (blockedCount > 0) {
+          this.log(`🚫 Blocked ${blockedCount} YouTube elements on Perplexity/Comet`);
+        }
       };
 
-      // Initial pass and observe mutations
-      nuke();
+      // Multiple aggressive passes for Comet browser compatibility
+      nuke(); // Initial pass
+      setTimeout(() => nuke(), 500);  // Second pass after 500ms
+      setTimeout(() => nuke(), 1000); // Third pass after 1s
+      setTimeout(() => nuke(), 2000); // Fourth pass after 2s
+      
+      // Continuous observation
       const obs = new MutationObserver(() => nuke());
       obs.observe(document.documentElement, { childList: true, subtree: true });
     } catch (e) {
@@ -1068,8 +1159,7 @@ class ContentAnalyzer {
     // Comprehensive list of vulgar/inappropriate keywords and patterns
     const vulgarKeywords = [
       // Explicit vulgar terms (exact matches)
-      'fuck', 'shit', 'pussy', 'dick', 'cunt', 'asshole', 'bitch', 'slut',
-      'nigga', 'nigger', 'whore', 'hoe', 'cock', 'penis', 'vagina',
+      'pussy', 'vagina',
       
       // Adult content terms (exact matches)
       'porn', 'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn',
@@ -1081,7 +1171,7 @@ class ContentAnalyzer {
       
       // Common vulgar site patterns (exact matches)
       'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn', 'tube8',
-      'adultfriendfinder', 'ashleymadison', 'adult dating', 'hookup',
+      'adultfriendfinder', 'ashleymadison', 'adult dating',
       
       // File extensions for adult content (exact matches)
       '.xxx', '.adult', '.porn', '.sex'
@@ -1186,15 +1276,6 @@ class ContentAnalyzer {
         shouldBlock: true,
         reason: `Vulgar content detected in page text: "${matchedKeyword}"`,
         matchedPattern: 'Page content contains vulgar keywords'
-      };
-    }
-    
-    if (contentData.hasVideoElements && (urlHasVulgarContent || titleHasVulgarContent || descriptionHasVulgarContent)) {
-      this.log('🚫 VIDEO ELEMENTS WITH VULGAR CONTEXT DETECTED');
-      return {
-        shouldBlock: true,
-        reason: 'Adult video content detected',
-        matchedPattern: 'Video elements with vulgar-related context'
       };
     }
     

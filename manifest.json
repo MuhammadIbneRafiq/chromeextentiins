@@ -34,6 +34,11 @@
       "exclude_matches": ["*://tue.video.yuja.com/*"],
       "js": ["content.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.perplexity.ai/*"],
+      "css": ["block-youtube-perplexity.css"],
+      "run_at": "document_start"
     }
   ],
   
@@ -67,7 +72,12 @@
         "id": "rules_yt_on_google",
         "enabled": true,
         "path": "rules_yt_on_google.json"
+      },
+      {
+        "id": "rules_yt_on_perplexity",
+        "enabled": true,
+        "path": "rules_yt_on_perplexity.json"
       }
     ]
   }
-} 
+}
