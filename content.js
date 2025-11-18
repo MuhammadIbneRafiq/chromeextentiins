@@ -61,6 +61,84 @@ console.log('[AI Guardian] User Agent:', navigator.userAgent);
   }
 })();
 
+(function() {
+  const host = location.hostname;
+  const isGoogleHost = /(^|\.)google\.(com|[a-z]{2,3})(\.[a-z]{2})?$/.test(host) || /^images\.google\./.test(host);
+  if (!isGoogleHost) return;
+
+  const isImagesVertical = () => {
+    try {
+      const search = location.search || '';
+      const pathname = location.pathname || '';
+      if (/[?&]tbm=isch(&|$)/.test(search)) return true;
+      if (/[?&]udm=2(&|$)/.test(search)) return true;
+      if (pathname === '/imghp') return true;
+      if (/^images\.google\./.test(host)) return true;
+      return false;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const redirectIfImages = () => {
+    if (!isImagesVertical()) return;
+    if (window._aiGuardianImagesRedirected) return;
+    window._aiGuardianImagesRedirected = true;
+    try {
+      const url = new URL(location.href);
+      const tbm = url.searchParams.get('tbm');
+      const udm = url.searchParams.get('udm');
+      if (tbm === 'isch' || udm === '2') {
+        if (tbm === 'isch') url.searchParams.delete('tbm');
+        if (udm === '2') url.searchParams.delete('udm');
+        url.searchParams.delete('source');
+        try { if (window.stop) window.stop(); } catch (e) {}
+        location.replace(url.toString());
+        return;
+      }
+    } catch (e) {
+      try {
+        if (document.documentElement) {
+          document.documentElement.innerHTML = '';
+        }
+        document.write('<!DOCTYPE html><html><head><title>Blocked</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:#111;color:#fff;"><div style="text-align:center;max-width:480px;padding:24px;"><h1 style="font-weight:400;margin-bottom:12px;">Google Images blocked</h1><p style="opacity:0.8;">AI Productivity Guardian has disabled Google Images to help you stay focused.</p></div></body></html>');
+        document.close();
+      } catch (e2) {}
+    }
+  };
+
+  const block = () => {
+    redirectIfImages();
+    try {
+      document.querySelectorAll('a[href*="tbm=isch"], a[href*="/imghp"], a[href*="udm=2"]').forEach(link => {
+        const tab = link.closest('g-menu-item, div, span, a') || link;
+        tab.style.display = 'none';
+        link.removeAttribute('href');
+        link.style.pointerEvents = 'none';
+        link.style.cursor = 'default';
+      });
+    } catch (e) {}
+  };
+
+  block();
+  setTimeout(block, 100);
+  setTimeout(block, 500);
+  setTimeout(block, 1000);
+  setTimeout(block, 2000);
+
+  if (document.documentElement) {
+    const obs = new MutationObserver(block);
+    obs.observe(document.documentElement, { childList: true, subtree: true });
+  } else {
+    setTimeout(() => {
+      if (document.documentElement) {
+        const obs2 = new MutationObserver(block);
+        obs2.observe(document.documentElement, { childList: true, subtree: true });
+      }
+    }, 100);
+  }
+})();
+
 class ContentAnalyzer {
   constructor() {
     this.analyzed = false;
@@ -576,6 +654,21 @@ class ContentAnalyzer {
           const card = a.closest('div');
           if (card) card.style.display = 'none';
         });
+        
+        document.querySelectorAll('a[href*="tbm=isch"], a[href*="/imghp"]').forEach(link => {
+          const tab = link.closest('g-menu-item, div, span, a') || link;
+          tab.style.display = 'none';
+          link.removeAttribute('href');
+          link.style.pointerEvents = 'none';
+          link.style.cursor = 'default';
+        });
+        
+        if (/[?&]tbm=isch(&|$)/.test(location.search) || location.pathname === '/imghp') {
+          if (!this._aiGuardianImagesBlocked) {
+            this._aiGuardianImagesBlocked = true;
+            this.blockPage('Google Images search is blocked');
+          }
+        }
         
         // Enhanced: Hide Google search results that don't match focus topics
         if (this.focusMode) {

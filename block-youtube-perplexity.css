@@ -34,3 +34,14 @@ video[src*="youtube"],
 video[src*="youtu.be"] {
   display: none !important;
 }
+
+/* Block Google Images thumbnails and preview images */
+/* Grid thumbnails on Google Images */
+#islrg img,
+.islrc img,
+a[href*="imgurl="] img,
+/* Large preview image in the side panel / viewer */
+#Sva75c img {
+  display: none !important;
+  visibility: hidden !important;
+}
