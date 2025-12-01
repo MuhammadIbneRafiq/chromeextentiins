@@ -1404,11 +1404,8 @@ class ContentAnalyzer {
       <div style="max-width: 600px;">
         <div style="font-size: 80px; margin-bottom: 20px;">🚫</div>
         <h1 style="font-size: 48px; margin-bottom: 20px; font-weight: 300;">Stay Focused!</h1>
-        <p style="font-size: 24px; margin-bottom: 20px; opacity: 0.9;">
+        <p style="font-size: 24px; margin-bottom: 30px; opacity: 0.9;">
           This site has been blocked to help you stay productive.
-        </p>
-        <p style="font-size: 18px; margin-bottom: 30px; opacity: 0.7;">
-          Reason: ${reason}
         </p>
         <div style="margin-bottom: 30px;">
           <p style="font-size: 16px; margin-bottom: 15px;">Try these productive alternatives instead:</p>
