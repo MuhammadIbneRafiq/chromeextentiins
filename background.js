@@ -13,7 +13,8 @@ class ProductivityGuardian {
       'appletv.com', 'crunchyroll.com', 'funimation.com', 'vudu.com',
       // Adult/vulgar sites
       'pornhub.com', 'xhamster.com', 'xvideos.com', 'redtube.com', 'youporn.com', 'tube8.com',
-      'adultfriendfinder.com', 'ashleymadison.com', 'adultdating.com', 'hookup.com'
+      'adultfriendfinder.com', 'ashleymadison.com', 'adultdating.com', 'hookup.com',
+      'blacked.com', 'tushy.com', 'vixen.com'
     ];
     this.allowedSites = ['stackoverflow.com', 'github.com', 'developer.mozilla.org', 'coursera.org', 'khan-academy.org', 'tue.video.yuja.com'];
     this.focusMode = false;
