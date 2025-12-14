@@ -149,6 +149,7 @@ class ContentAnalyzer {
       keywordsIncludes: []
     };
     this.init();
+    this.logBlockingKeywordLists();
   }
 
   async getAmsterdamHour() {
@@ -1094,6 +1095,39 @@ class ContentAnalyzer {
     }
   }
 
+  logBlockingKeywordLists() {
+    this.log('📃 Blocking keyword lists loaded (content script)', {
+      movieKeywords: this.getMovieKeywords(),
+      vulgarKeywords: this.getVulgarKeywords()
+    });
+  }
+
+  getMovieKeywords() {
+    return [
+      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies',
+      'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
+      'watch online', 'free movies', 'hd movies', 'full movie',
+      'movie', 'film',
+      'movie download', 'film download', 'torrent', 'streaming site',
+      'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
+      'streamingmovies', 'moviehub', 'filmhub', 'cinemahub',
+      'movie4k', 'moviehd', 'moviehub', 'filmhub', 'cinemahub'
+    ];
+  }
+
+  getVulgarKeywords() {
+    return [
+      'fuck', 'pussy', 'vagina',
+      'porn', 'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn',
+      'adult', 'sex', 'sexual', 'nude', 'naked', 'nudity', 'erotic',
+      'xxx', 'x-rated', 'adult content', 'mature content', 'explicit',
+      'nsfw', 'not safe for work', 'adult site',
+      'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn', 'tube8',
+      'adultfriendfinder', 'ashleymadison', 'adult dating', 'hookup',
+      '.xxx', '.adult', '.porn', '.sex'
+    ];
+  }
+
   // NEW: Comprehensive movie content detection and blocking
   checkForMovieContent(contentData) {
     const url = (contentData.url || '').toLowerCase();
@@ -1101,27 +1135,7 @@ class ContentAnalyzer {
     const description = (contentData.description || '').toLowerCase();
     const keywords = (contentData.keywords || '').toLowerCase();
     const textContent = (contentData.textContent || '').toLowerCase();
-    
-    // Comprehensive list of movie-related keywords and patterns
-    const movieKeywords = [
-      // Movie streaming sites (exact matches)
-      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies',
-      
-      // Movie/film terms (exact matches)
-      'movie', 'movies', 'film', 'films',
-          
-      // Movie-related phrases (exact matches)
-      'watch online', 'free movies', 'hd movies', 'full movie',
-      'movie', 'film',
-      'movie download', 'film download', 'torrent',
-          
-      // Common movie site patterns (exact matches)
-      'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
-      'streamingmovies', 'moviehub', 'filmhub', 'cinemahub',
-      
-      // Common movie site domains (exact matches)
-      'movie4k', 'moviehd', 'moviehub', 'filmhub', 'cinemahub'
-    ];
+    const movieKeywords = this.getMovieKeywords();
     
     // Helper function to check for word boundaries to prevent false positives
     const hasWordBoundary = (text, keyword) => {
@@ -1248,27 +1262,7 @@ class ContentAnalyzer {
     const description = (contentData.description || '').toLowerCase();
     const keywords = (contentData.keywords || '').toLowerCase();
     const textContent = (contentData.textContent || '').toLowerCase();
-    
-    // Comprehensive list of vulgar/inappropriate keywords and patterns
-    const vulgarKeywords = [
-      // Explicit vulgar terms (exact matches)
-      'pussy', 'vagina',
-      
-      // Adult content terms (exact matches)
-      'porn', 'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn',
-      'adult', 'sex', 'sexual', 'nude', 'naked', 'nudity', 'erotic',
-      
-      // Inappropriate content patterns (exact matches)
-      'xxx', 'x-rated', 'adult content', 'mature content', 'explicit',
-      'nsfw', 'not safe for work', 'adult site',
-      
-      // Common vulgar site patterns (exact matches)
-      'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn', 'tube8',
-      'adultfriendfinder', 'ashleymadison', 'adult dating',
-      
-      // File extensions for adult content (exact matches)
-      '.xxx', '.adult', '.porn', '.sex'
-    ];
+    const vulgarKeywords = this.getVulgarKeywords();
     
     // Helper function to check for word boundaries to prevent false positives
     const hasWordBoundary = (text, keyword) => {

@@ -207,6 +207,7 @@ class ProductivityGuardian {
     }
     
     this.log(`AI Productivity Guardian v${this.version} initialized`);
+    this.logBlockingKeywordLists();
     
     // Check if focus lock should auto-expire
     this.checkFocusLockExpiry();
@@ -666,27 +667,7 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
   checkUrlForMovieContent(url, hostname) {
     const urlLower = (url || '').toLowerCase();
     const hostnameLower = (hostname || '').toLowerCase();
-    
-    // Comprehensive list of movie-related keywords and patterns
-    const movieKeywords = [
-      // Movie streaming sites (exact matches)
-      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies',
-      
-      // Movie/film terms (exact matches)
-      'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
-      
-      // Movie-related phrases (exact matches)
-      'watch online', 'free movies', 'hd movies', 'full movie',
-      'movie', 'film',
-      'movie download', 'film download', 'torrent', 'streaming site',
-            
-      // Common movie site patterns (exact matches)
-      'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
-      'streamingmovies', 'moviehub', 'filmhub', 'cinemahub',
-      
-      // Common movie site domains (exact matches)
-      'movie4k', 'moviehd', 'moviehub', 'filmhub', 'cinemahub'
-    ];
+    const movieKeywords = this.getMovieKeywords();
     
     // Check URL for movie patterns
     const urlHasMovieContent = movieKeywords.some(keyword => urlLower.includes(keyword));
@@ -733,27 +714,7 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
   checkUrlForVulgarContent(url, hostname) {
     const urlLower = (url || '').toLowerCase();
     const hostnameLower = (hostname || '').toLowerCase();
-    
-    // Comprehensive list of vulgar/inappropriate keywords and patterns
-    const vulgarKeywords = [
-      // Explicit vulgar terms (exact matches)
-      'fuck', 'pussy', 'vagina',
-      
-      // Adult content terms (exact matches)
-      'porn', 'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn',
-      'adult', 'sex', 'sexual', 'nude', 'naked', 'nudity', 'erotic',
-      
-      // Inappropriate content patterns (exact matches)
-      'xxx', 'x-rated', 'adult content', 'mature content', 'explicit',
-      'nsfw', 'not safe for work', 'adult site',
-      
-      // Common vulgar site patterns (exact matches)
-      'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn', 'tube8',
-      'adultfriendfinder', 'ashleymadison', 'adult dating', 'hookup',
-      
-      // File extensions for adult content (exact matches)
-      '.xxx', '.adult', '.porn', '.sex'
-    ];
+    const vulgarKeywords = this.getVulgarKeywords();
     
     // Check URL for vulgar patterns
     const urlHasVulgarContent = vulgarKeywords.some(keyword => urlLower.includes(keyword));
@@ -794,6 +755,39 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
       shouldBlock: false,
       reason: 'No vulgar content detected in URL'
     };
+  }
+
+  getMovieKeywords() {
+    return [
+      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies',
+      'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
+      'watch online', 'free movies', 'hd movies', 'full movie',
+      'movie', 'film',
+      'movie download', 'film download', 'torrent', 'streaming site',
+      'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
+      'streamingmovies', 'moviehub', 'filmhub', 'cinemahub',
+      'movie4k', 'moviehd', 'moviehub', 'filmhub', 'cinemahub'
+    ];
+  }
+
+  getVulgarKeywords() {
+    return [
+      'fuck', 'pussy', 'vagina',
+      'porn', 'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn',
+      'adult', 'sex', 'sexual', 'nude', 'naked', 'nudity', 'erotic',
+      'xxx', 'x-rated', 'adult content', 'mature content', 'explicit',
+      'nsfw', 'not safe for work', 'adult site',
+      'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn', 'tube8',
+      'adultfriendfinder', 'ashleymadison', 'adult dating', 'hookup',
+      '.xxx', '.adult', '.porn', '.sex'
+    ];
+  }
+
+  logBlockingKeywordLists() {
+    this.log('📃 Blocking keyword lists loaded', {
+      movieKeywords: this.getMovieKeywords(),
+      vulgarKeywords: this.getVulgarKeywords()
+    });
   }
 
   async analyzeContentWithAI(contentData) {
