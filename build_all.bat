@@ -124,8 +124,10 @@ if exist "dist\uninstall_guardian.exe" (
 echo.
 echo Starting Extension Guardian in background (no admin required)...
 if exist dist\extension-guardian-desktop.exe (
-  start "ExtensionGuardian" "%cd%\dist\extension-guardian-desktop.exe" --background
-  echo [OK] Desktop app started in background
+  rem Launch directly - exe is built without console so no terminal window appears
+  start "" "%cd%\dist\extension-guardian-desktop.exe" --background
+  echo [OK] Desktop app started in background (no terminal)
+  echo [OK] App is registered to auto-start on Windows login
 ) else (
   echo [ERROR] Desktop app missing, cannot start
 )
