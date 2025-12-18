@@ -77,6 +77,18 @@ echo Building guardian_watchdog.exe from spec...
 python -m PyInstaller --clean --noconfirm guardian_watchdog.spec
 :after_build_watchdog
 
+rem Installer (sets up service and autostart)
+if exist install_guardian_service.spec goto build_installer_spec
+if exist install_guardian_service.py (
+  echo Building install_guardian.exe (default config)...
+  python -m PyInstaller --noconfirm --onefile --name install_guardian install_guardian_service.py
+)
+goto after_build_installer
+:build_installer_spec
+echo Building install_guardian.exe from spec...
+python -m PyInstaller --clean --noconfirm install_guardian_service.spec
+:after_build_installer
+
 echo.
 echo Checking outputs...
 if exist "dist\extension-guardian-desktop.exe" (
@@ -97,10 +109,25 @@ if exist "dist\guardian_watchdog.exe" (
   echo [WARN] guardian_watchdog.exe not found
 )
 
+if exist "dist\install_guardian.exe" (
+  echo [OK] install_guardian.exe created
+) else (
+  echo [WARN] install_guardian.exe not found
+)
+
 if exist "dist\uninstall_guardian.exe" (
   echo [OK] uninstall_guardian.exe created
 ) else (
   echo [INFO] uninstall_guardian.exe not built (optional)
+)
+
+echo.
+echo Starting Extension Guardian in background (no admin required)...
+if exist dist\extension-guardian-desktop.exe (
+  start "ExtensionGuardian" "%cd%\dist\extension-guardian-desktop.exe" --background
+  echo [OK] Desktop app started in background
+) else (
+  echo [ERROR] Desktop app missing, cannot start
 )
 
 echo.
