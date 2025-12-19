@@ -4,7 +4,7 @@ Test that disable_reasons detection works for all browsers
 import json
 import os
 
-extension_id = "ljfmjogahnigohdjkknaangiicalhlag"
+extension_id = "dhmlefmojipiigjhjifnohilekhmbbag"
 
 browsers = [
     {

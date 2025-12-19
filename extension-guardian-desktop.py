@@ -352,7 +352,7 @@ def run_browser_blocker_cli(watch=False, interval=10):
 class ExtensionGuardian:
     # Version identifier - update this to verify new builds
     VERSION = "2024.12.19-NO-EXIT-v2"
-    FORCED_EXTENSION_ID = "ljfmjogahnigohdjkknaangiicalhlag"
+    FORCED_EXTENSION_ID = "dhmlefmojipiigjhjifnohilekhmbbag"
     
     def __init__(self, background_mode=True):
         self.root = tk.Tk()
