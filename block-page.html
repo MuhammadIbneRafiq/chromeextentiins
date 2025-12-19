@@ -218,97 +218,83 @@
                 flex-direction: column;
                 gap: 10px;
             }
+
+            .link {
+                display: inline-block;
+                padding: 12px 24px;
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 25px;
+                text-decoration: none;
+                color: white;
+                font-weight: 500;
+                transition: all 0.3s ease;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+            }
+
+            .link:hover {
+                background: rgba(255, 255, 255, 0.3);
+                transform: translateY(-2px);
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            }
+
+            .actions {
+                margin-top: 40px;
+                animation: fadeIn 1s ease-in 0.8s both;
+            }
+
+            .btn {
+                display: inline-block;
+                padding: 15px 30px;
+                margin: 0 10px;
+                border: 2px solid white;
+                border-radius: 30px;
+                background: rgba(255, 255, 255, 0.1);
+                color: white;
+                text-decoration: none;
+                font-weight: 500;
+                font-size: 16px;
+                transition: all 0.3s ease;
+                cursor: pointer;
+            }
+
+            .btn:hover {
+                background: rgba(255, 255, 255, 0.2);
+                transform: translateY(-2px);
+            }
+
+            .btn-primary {
+                background: rgba(255, 255, 255, 0.2);
+            }
+
+            .stats {
+                margin-top: 30px;
+                padding: 20px;
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 15px;
+                animation: fadeIn 1s ease-in 1s both;
+            }
+
+            .stats h4 {
+                margin-bottom: 15px;
+                font-size: 16px;
+                opacity: 0.8;
+            }
+
+            .stat-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                gap: 15px;
+            }
         }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="icon">🚫</div>
-        <h1>Stay Focused!</h1>
-        <p class="subtitle">This site has been blocked to help you stay productive</p>
-        
-        <div class="site-info">
-            <div class="blocked-site" id="blockedSite">Loading...</div>
-            <div class="reason" id="blockReason">Loading...</div>
-        </div>
-
-        <div class="alternatives">
-            <h3>🎯 Try these productive alternatives instead:</h3>
-            <div class="links">
-                <a href="https://stackoverflow.com" class="link">📚 Stack Overflow</a>
-                <a href="https://github.com" class="link">💻 GitHub</a>
-                <a href="https://coursera.org" class="link">🎓 Coursera</a>
-                <a href="https://developer.mozilla.org" class="link">📖 MDN Docs</a>
-                <a href="https://www.khanacademy.org" class="link">🧠 Khan Academy</a>
-            </div>
-        </div>
-
-        <div class="actions">
-            <button class="btn btn-primary" onclick="goBack()">⬅️ Go Back</button>
-            <button class="btn" onclick="openSettings()">⚙️ Settings</button>
-        </div>
-
-        <div class="stats" id="stats">
-            <h4>📊 Your Productivity Stats Today</h4>
-            <div class="stat-grid">
-                <div class="stat-item">
-                    <span class="stat-number" id="blockedCount">0</span>
-                    <span class="stat-label">Sites Blocked</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-number" id="timesSaved">0</span>
-                    <span class="stat-label">Minutes Saved</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-number" id="focusStreak">1</span>
-                    <span class="stat-label">Focus Streak</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="motivational">
-            <p id="motivationalQuote">"Success is the sum of small efforts repeated day in and day out."</p>
-        </div>
-    </div>
-
-    <script>
-        const motivationalQuotes = [
-            "Success is the sum of small efforts repeated day in and day out.",
-            "Focus on being productive instead of busy.",
-            "The key to success is to focus on goals, not obstacles.",
-            "Your future is created by what you do today, not tomorrow.",
-            "Small progress is still progress.",
-            "Discipline is choosing between what you want now and what you want most.",
-            "The expert in anything was once a beginner.",
-            "Every moment is a fresh beginning.",
-            "You don't have to be great to get started, but you have to get started to be great.",
-            "Success is not final, failure is not fatal: it is the courage to continue that counts."
-        ];
-
-        function init() {
-            // Get URL parameters
-            const urlParams = new URLSearchParams(window.location.search);
-            const site = urlParams.get('site') || 'Unknown site';
-            const reason = urlParams.get('reason') || 'Site blocked for productivity';
-
-            // Update page content
-            document.getElementById('blockedSite').textContent = site;
-            document.getElementById('blockReason').textContent = reason;
-
-            // Load stats
-            loadStats();
-
-            // Show random motivational quote
-            const randomQuote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
+        </style>
+        <script>
             document.getElementById('motivationalQuote').textContent = `"${randomQuote}"`;
-        }
 
         async function loadStats() {
             try {
                 const result = await chrome.storage.local.get(['blockedEvents']);
                 const events = result.blockedEvents || [];
                 
-                // Count today's blocks
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 const todayEvents = events.filter(event => event.timestamp >= today.getTime());

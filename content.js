@@ -1,3 +1,144 @@
+// Immediate execution BEFORE ContentAnalyzer construction
+console.log('[AI Guardian] Content script loaded on:', location.href);
+console.log('[AI Guardian] Hostname:', location.hostname);
+console.log('[AI Guardian] User Agent:', navigator.userAgent);
+
+// IMMEDIATE YouTube blocking on Perplexity/Comet (runs before class init)
+(function() {
+  const isPerplexity = /perplexity\.ai/.test(location.hostname) || 
+                       location.hostname.includes('perplexity') ||
+                       /comet/i.test(navigator.userAgent) ||
+                       /perplexity/i.test(navigator.userAgent);
+  
+  console.log('[AI Guardian] Perplexity/Comet detection (immediate):', isPerplexity);
+  
+  if (isPerplexity) {
+    console.log('[AI Guardian] ✅ PERPLEXITY/COMET DETECTED - Starting immediate YouTube blocking');
+    
+    const blockYouTube = () => {
+      let count = 0;
+      document.querySelectorAll('iframe[src*="youtube.com"], iframe[src*="youtu.be"]').forEach(el => {
+        el.remove();
+        count++;
+      });
+      document.querySelectorAll('[href*="youtube.com"], [href*="youtu.be"]').forEach(link => {
+        let parent = link.closest('div[class*="card"], div[class*="result"], article, section') || link.parentElement;
+        if (parent && parent.style.display !== 'none') {
+          parent.style.display = 'none';
+          count++;
+        }
+      });
+      document.querySelectorAll('img[src*="ytimg.com"], img[src*="youtube.com"], img[src*="youtu.be"]').forEach(img => {
+        let parent = img.closest('div[class*="card"], div[class*="result"], article, section') || img.parentElement;
+        if (parent && parent.style.display !== 'none') {
+          parent.style.display = 'none';
+          count++;
+        }
+      });
+      if (count > 0) console.log(`[AI Guardian] 🚫 Blocked ${count} YouTube elements (immediate pass)`);
+    };
+    
+    // Multiple passes
+    blockYouTube();
+    setTimeout(blockYouTube, 100);
+    setTimeout(blockYouTube, 500);
+    setTimeout(blockYouTube, 1000);
+    setTimeout(blockYouTube, 2000);
+    
+    // Continuous observation
+    if (document.documentElement) {
+      const obs = new MutationObserver(blockYouTube);
+      obs.observe(document.documentElement, { childList: true, subtree: true });
+    } else {
+      // If documentElement not ready, wait and try again
+      setTimeout(() => {
+        if (document.documentElement) {
+          const obs = new MutationObserver(blockYouTube);
+          obs.observe(document.documentElement, { childList: true, subtree: true });
+        }
+      }, 100);
+    }
+  }
+})();
+
+(function() {
+  const host = location.hostname;
+  const isGoogleHost = /(^|\.)google\.(com|[a-z]{2,3})(\.[a-z]{2})?$/.test(host) || /^images\.google\./.test(host);
+  if (!isGoogleHost) return;
+
+  const isImagesVertical = () => {
+    try {
+      const search = location.search || '';
+      const pathname = location.pathname || '';
+      if (/[?&]tbm=isch(&|$)/.test(search)) return true;
+      if (/[?&]udm=2(&|$)/.test(search)) return true;
+      if (pathname === '/imghp') return true;
+      if (/^images\.google\./.test(host)) return true;
+      return false;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const redirectIfImages = () => {
+    if (!isImagesVertical()) return;
+    if (window._aiGuardianImagesRedirected) return;
+    window._aiGuardianImagesRedirected = true;
+    try {
+      const url = new URL(location.href);
+      const tbm = url.searchParams.get('tbm');
+      const udm = url.searchParams.get('udm');
+      if (tbm === 'isch' || udm === '2') {
+        if (tbm === 'isch') url.searchParams.delete('tbm');
+        if (udm === '2') url.searchParams.delete('udm');
+        url.searchParams.delete('source');
+        try { if (window.stop) window.stop(); } catch (e) {}
+        location.replace(url.toString());
+        return;
+      }
+    } catch (e) {
+      try {
+        if (document.documentElement) {
+          document.documentElement.innerHTML = '';
+        }
+        document.write('<!DOCTYPE html><html><head><title>Blocked</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:#111;color:#fff;"><div style="text-align:center;max-width:480px;padding:24px;"><h1 style="font-weight:400;margin-bottom:12px;">Google Images blocked</h1><p style="opacity:0.8;">AI Productivity Guardian has disabled Google Images to help you stay focused.</p></div></body></html>');
+        document.close();
+      } catch (e2) {}
+    }
+  };
+
+  const block = () => {
+    redirectIfImages();
+    try {
+      document.querySelectorAll('a[href*="tbm=isch"], a[href*="/imghp"], a[href*="udm=2"]').forEach(link => {
+        const tab = link.closest('g-menu-item, div, span, a') || link;
+        tab.style.display = 'none';
+        link.removeAttribute('href');
+        link.style.pointerEvents = 'none';
+        link.style.cursor = 'default';
+      });
+    } catch (e) {}
+  };
+
+  block();
+  setTimeout(block, 100);
+  setTimeout(block, 500);
+  setTimeout(block, 1000);
+  setTimeout(block, 2000);
+
+  if (document.documentElement) {
+    const obs = new MutationObserver(block);
+    obs.observe(document.documentElement, { childList: true, subtree: true });
+  } else {
+    setTimeout(() => {
+      if (document.documentElement) {
+        const obs2 = new MutationObserver(block);
+        obs2.observe(document.documentElement, { childList: true, subtree: true });
+      }
+    }, 100);
+  }
+})();
+
 class ContentAnalyzer {
   constructor() {
     this.analyzed = false;
@@ -8,9 +149,38 @@ class ContentAnalyzer {
       keywordsIncludes: []
     };
     this.init();
+    this.logBlockingKeywordLists();
+  }
+
+  async getAmsterdamHour() {
+    // Prefer asking background (which uses network providers and cache)
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'getAmsterdamHour' });
+      if (res && typeof res.hour === 'number') {
+        this.log('🕒 Amsterdam hour from background (content): ' + res.hour);
+        return res.hour;
+      }
+    } catch (e) {
+      // fall through to Intl fallback
+    }
+    // Fallback: compute with Intl locally
+    try {
+      const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Amsterdam', hour: '2-digit', hour12: false });
+      const hourStr = fmt.format(Date.now());
+      const hour = parseInt(hourStr, 10);
+      this.log('🕒 Amsterdam hour via Intl (content): ' + hour);
+      return hour;
+    } catch (e) {
+      const h = new Date().getHours();
+      this.log('⚠️ Amsterdam hour fallback (local): ' + h);
+      return h;
+    }
   }
 
   async init() {
+    // IMMEDIATELY block YouTube on Perplexity/Comet BEFORE anything else
+    this.blockInlineYouTubeOnPerplexity();
+    
     // Wait for DOM to be ready
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => this.analyzeContent());
@@ -18,22 +188,14 @@ class ContentAnalyzer {
       this.analyzeContent();
     }
 
-    // Set up debug message listener
     this.setupDebugListener();
-    
-    // Log initialization
-    this.log('🚀 Content Analyzer initialized');
   }
 
-  // Enhanced logging that will be visible in regular console
   log(message, data = null) {
     const timestamp = new Date().toLocaleTimeString();
     const logMessage = `[AI Guardian ${timestamp}] ${message}`;
-    
-    // Content script console (blocked page)
     console.log(logMessage, data || '');
     
-    // Also log to regular browser console for visibility
     if (window.console && window.console.log) {
       console.log(`%c${logMessage}`, 'background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold;', data || '');
     }
@@ -89,25 +251,42 @@ class ContentAnalyzer {
 
       // Apply inline YouTube block on Google Search (videos tab and SERP inline players)
       this.blockInlineYouTubeOnGoogle();
+      
+      // Apply inline YouTube block on Perplexity Search
+      this.blockInlineYouTubeOnPerplexity();
 
       // Wait a bit for content to load
       setTimeout(async () => {
         const contentData = await this.extractContentData();
         
-        // ALWAYS check vulgar content first (even during bypass window)
-        const vulgarBlockResult = this.checkForVulgarContent(contentData);
-        if (vulgarBlockResult.shouldBlock) {
-          this.log('🚫 VULGAR CONTENT DETECTED - BLOCKING IMMEDIATELY (always blocked):', vulgarBlockResult);
-          this.blockPage(vulgarBlockResult.reason);
-          return;
+        // Night relax window for Amsterdam: 03:00–06:00 — allow everything except vulgar
+        try {
+          const amsHour = await this.getAmsterdamHour();
+          if (typeof amsHour === 'number' && amsHour >= 3 && amsHour < 6) {
+            const vulgarBlockResult = this.checkForVulgarContent(contentData);
+            if (vulgarBlockResult.shouldBlock) {
+              this.log('🚫 VULGAR CONTENT (night window) - BLOCKING:', vulgarBlockResult);
+              this.blockPage(vulgarBlockResult.reason);
+              return;
+            }
+            this.log('🌙 03–06 Amsterdam: relaxing rules – allowing non‑vulgar content');
+            return; // Skip all other blocking during relax window
+          }
+        } catch (e) {
+          this.log('⚠️ Amsterdam time check failed; proceeding with normal rules');
         }
         
-        // Note: Time-based bypass for movies is handled by background.js
-        // We still check for movie content here for normal operation outside bypass window
+        // NEW: AGGRESSIVE MOVIE BLOCKING - Check for movie-related content first
         const movieBlockResult = this.checkForMovieContent(contentData);
         if (movieBlockResult.shouldBlock) {
           this.log('🚫 MOVIE CONTENT DETECTED - BLOCKING IMMEDIATELY:', movieBlockResult);
           this.blockPage(movieBlockResult.reason);
+          return;
+        }
+        const vulgarBlockResult = this.checkForVulgarContent(contentData);
+        if (vulgarBlockResult.shouldBlock) {
+          this.log('🚫 VULGAR CONTENT DETECTED - BLOCKING IMMEDIATELY:', vulgarBlockResult);
+          this.blockPage(vulgarBlockResult.reason);
           return;
         }
         
@@ -290,7 +469,7 @@ class ContentAnalyzer {
       data.chatQuery = await this.extractChatQuery();
     }
 
-    // Look for streaming/entertainment indicators (simplified)
+    // Look for streaming indicators (simplified)
     data.hasVideoElements = document.querySelectorAll('video').length > 0;
     
     this.log('🎥 Video Elements:', data.hasVideoElements);
@@ -477,6 +656,21 @@ class ContentAnalyzer {
           if (card) card.style.display = 'none';
         });
         
+        document.querySelectorAll('a[href*="tbm=isch"], a[href*="/imghp"]').forEach(link => {
+          const tab = link.closest('g-menu-item, div, span, a') || link;
+          tab.style.display = 'none';
+          link.removeAttribute('href');
+          link.style.pointerEvents = 'none';
+          link.style.cursor = 'default';
+        });
+        
+        if (/[?&]tbm=isch(&|$)/.test(location.search) || location.pathname === '/imghp') {
+          if (!this._aiGuardianImagesBlocked) {
+            this._aiGuardianImagesBlocked = true;
+            this.blockPage('Google Images search is blocked');
+          }
+        }
+        
         // Enhanced: Hide Google search results that don't match focus topics
         if (this.focusMode) {
           this.filterGoogleSearchResults();
@@ -492,7 +686,91 @@ class ContentAnalyzer {
     }
   }
 
+  blockInlineYouTubeOnPerplexity() {
+    try {
+      // Log detection attempt
+      this.log('🔍 Checking for Perplexity/Comet...', {
+        hostname: location.hostname,
+        userAgent: navigator.userAgent,
+        href: location.href
+      });
+      
+      // Check for Perplexity (works in all browsers including Comet)
+      const isPerplexity = /perplexity\.ai/.test(location.hostname) || 
+                          location.hostname.includes('perplexity') ||
+                          /comet/i.test(navigator.userAgent) || // Comet browser
+                          /perplexity/i.test(navigator.userAgent); // Perplexity in UA
+      
+      this.log('🔍 Detection result:', isPerplexity ? '✅ PERPLEXITY/COMET DETECTED' : '❌ Not Perplexity/Comet');
+      
+      if (!isPerplexity) return;
 
+      this.log('🔍 Perplexity Search Detected (including Comet browser) - Applying YouTube Blocking');
+
+      const nuke = () => {
+        let blockedCount = 0;
+        
+        // Remove YouTube iframes and embeds
+        document.querySelectorAll('iframe[src*="youtube.com"], iframe[src*="youtu.be"]').forEach(el => {
+          el.remove();
+          blockedCount++;
+        });
+
+        // Hide YouTube video cards in search results
+        document.querySelectorAll('[href*="youtube.com"], [href*="youtu.be"]').forEach(link => {
+          // Find the parent card/container element
+          let parent = link.closest('div[class*="card"], div[class*="result"], article, section');
+          if (!parent) {
+            // If no specific card found, try to find the nearest meaningful container
+            parent = link.parentElement;
+            while (parent && parent.parentElement && parent.parentElement.tagName !== 'BODY') {
+              // Look for a container that seems to be a result item
+              if (parent.children.length > 1 || parent.querySelector('img, video')) {
+                break;
+              }
+              parent = parent.parentElement;
+            }
+          }
+          if (parent && parent.style.display !== 'none') {
+            parent.style.display = 'none';
+            blockedCount++;
+            this.log('🚫 Hidden YouTube result on Perplexity');
+          }
+        });
+
+        // Also remove any video elements that might be YouTube related
+        document.querySelectorAll('video[src*="youtube"], video[src*="youtu.be"]').forEach(el => {
+          el.remove();
+          blockedCount++;
+        });
+
+        // Remove YouTube thumbnails
+        document.querySelectorAll('img[src*="ytimg.com"], img[src*="youtube.com"], img[src*="youtu.be"]').forEach(img => {
+          const parent = img.closest('div[class*="card"], div[class*="result"], article, section') || img.parentElement;
+          if (parent && parent.style.display !== 'none') {
+            parent.style.display = 'none';
+            blockedCount++;
+          }
+        });
+        
+        if (blockedCount > 0) {
+          this.log(`🚫 Blocked ${blockedCount} YouTube elements on Perplexity/Comet`);
+        }
+      };
+
+      // Multiple aggressive passes for Comet browser compatibility
+      nuke(); // Initial pass
+      setTimeout(() => nuke(), 500);  // Second pass after 500ms
+      setTimeout(() => nuke(), 1000); // Third pass after 1s
+      setTimeout(() => nuke(), 2000); // Fourth pass after 2s
+      
+      // Continuous observation
+      const obs = new MutationObserver(() => nuke());
+      obs.observe(document.documentElement, { childList: true, subtree: true });
+    } catch (e) {
+      this.log('⚠️ Error blocking YouTube on Perplexity:', e);
+    }
+  }
 
   isSocialMediaSite() {
     const socialKeywords = [
@@ -817,6 +1095,39 @@ class ContentAnalyzer {
     }
   }
 
+  logBlockingKeywordLists() {
+    this.log('📃 Blocking keyword lists loaded (content script)', {
+      movieKeywords: this.getMovieKeywords(),
+      vulgarKeywords: this.getVulgarKeywords()
+    });
+  }
+
+  getMovieKeywords() {
+    return [
+      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies',
+      'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
+      'watch online', 'free movies', 'hd movies', 'full movie',
+      'movie', 'film',
+      'movie download', 'film download', 'torrent', 'streaming site',
+      'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
+      'streamingmovies', 'moviehub', 'filmhub', 'cinemahub',
+      'movie4k', 'moviehd', 'moviehub', 'filmhub', 'cinemahub'
+    ];
+  }
+
+  getVulgarKeywords() {
+    return [
+      'fuck', 'pussy', 'vagina',
+      'porn', 'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn',
+      'adult', 'sex', 'sexual', 'nude', 'naked', 'nudity', 'erotic',
+      'xxx', 'x-rated', 'adult content', 'mature content', 'explicit',
+      'nsfw', 'not safe for work', 'adult site',
+      'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn', 'tube8',
+      'adultfriendfinder', 'ashleymadison', 'adult dating', 'hookup',
+      '.xxx', '.adult', '.porn', '.sex'
+    ];
+  }
+
   // NEW: Comprehensive movie content detection and blocking
   checkForMovieContent(contentData) {
     const url = (contentData.url || '').toLowerCase();
@@ -824,38 +1135,7 @@ class ContentAnalyzer {
     const description = (contentData.description || '').toLowerCase();
     const keywords = (contentData.keywords || '').toLowerCase();
     const textContent = (contentData.textContent || '').toLowerCase();
-    
-    // Comprehensive list of movie-related keywords and patterns
-    const movieKeywords = [
-      // Movie streaming sites (exact matches)
-      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies', 'watchseries',
-      
-      // Movie/film terms (exact matches)
-      'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
-      
-      // Streaming platforms (exact matches)
-      'netflix', 'hulu', 'disney+', 'disneyplus', 'amazon prime', 'prime',
-      'hbo max', 'hbomax', 'peacock', 'paramount+', 'paramountplus',
-      'apple tv', 'appletv', 'crunchyroll', 'funimation', 'vudu',
-      
-      // Movie-related phrases (exact matches)
-      'watch online', 'free movies', 'hd movies', 'full movie',
-      'movie', 'film',
-      'movie download', 'film download', 'torrent',
-      
-      // Entertainment terms (exact matches)
-      'entertainment', 'tv shows', 'television', 'series', 'episode',
-      
-      // Common movie site patterns (exact matches)
-      'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
-      'streamingmovies', 'moviehub', 'filmhub', 'cinemahub',
-      
-      // File extensions and formats (exact matches)
-      '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm',
-      
-      // Common movie site domains (exact matches)
-      'movie4k', 'moviehd', 'moviehub', 'filmhub', 'cinemahub'
-    ];
+    const movieKeywords = this.getMovieKeywords();
     
     // Helper function to check for word boundaries to prevent false positives
     const hasWordBoundary = (text, keyword) => {
@@ -982,28 +1262,7 @@ class ContentAnalyzer {
     const description = (contentData.description || '').toLowerCase();
     const keywords = (contentData.keywords || '').toLowerCase();
     const textContent = (contentData.textContent || '').toLowerCase();
-    
-    // Comprehensive list of vulgar/inappropriate keywords and patterns
-    const vulgarKeywords = [
-      // Explicit vulgar terms (exact matches)
-      'fuck', 'shit', 'pussy', 'dick', 'cunt', 'asshole', 'bitch', 'slut',
-      'nigga', 'nigger', 'whore', 'hoe', 'cock', 'penis', 'vagina',
-      
-      // Adult content terms (exact matches)
-      'porn', 'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn',
-      'adult', 'sex', 'sexual', 'nude', 'naked', 'nudity', 'erotic',
-      
-      // Inappropriate content patterns (exact matches)
-      'xxx', 'x-rated', 'adult content', 'mature content', 'explicit',
-      'nsfw', 'not safe for work', 'adult entertainment', 'adult site',
-      
-      // Common vulgar site patterns (exact matches)
-      'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn', 'tube8',
-      'adultfriendfinder', 'ashleymadison', 'adult dating', 'hookup',
-      
-      // File extensions for adult content (exact matches)
-      '.xxx', '.adult', '.porn', '.sex'
-    ];
+    const vulgarKeywords = this.getVulgarKeywords();
     
     // Helper function to check for word boundaries to prevent false positives
     const hasWordBoundary = (text, keyword) => {
@@ -1107,15 +1366,6 @@ class ContentAnalyzer {
       };
     }
     
-    if (contentData.hasVideoElements && (urlHasVulgarContent || titleHasVulgarContent || descriptionHasVulgarContent)) {
-      this.log('🚫 VIDEO ELEMENTS WITH VULGAR CONTEXT DETECTED');
-      return {
-        shouldBlock: true,
-        reason: 'Adult video content detected',
-        matchedPattern: 'Video elements with vulgar-related context'
-      };
-    }
-    
     this.log('✅ No vulgar content detected - allowing page');
     return {
       shouldBlock: false,
@@ -1148,11 +1398,8 @@ class ContentAnalyzer {
       <div style="max-width: 600px;">
         <div style="font-size: 80px; margin-bottom: 20px;">🚫</div>
         <h1 style="font-size: 48px; margin-bottom: 20px; font-weight: 300;">Stay Focused!</h1>
-        <p style="font-size: 24px; margin-bottom: 20px; opacity: 0.9;">
+        <p style="font-size: 24px; margin-bottom: 30px; opacity: 0.9;">
           This site has been blocked to help you stay productive.
-        </p>
-        <p style="font-size: 18px; margin-bottom: 30px; opacity: 0.7;">
-          Reason: ${reason}
         </p>
         <div style="margin-bottom: 30px;">
           <p style="font-size: 16px; margin-bottom: 15px;">Try these productive alternatives instead:</p>

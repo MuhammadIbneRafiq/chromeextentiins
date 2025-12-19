@@ -6,14 +6,15 @@ class ProductivityGuardian {
     this.isEnabled = true;
     this.blockedSites = [
       'sflix.to', 'netflix.com', 'youtube.com', 'facebook.com', 'instagram.com', 'tiktok.com',
-      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies', 'watchseries',
+      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies',
       'fullmoviess.net', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
       'streamingmovies', 'moviehub', 'filmhub', 'cinemahub', 'movie4k', 'moviehd',
       'hulu.com', 'disneyplus.com', 'hbomax.com', 'peacock.com', 'paramountplus.com',
       'appletv.com', 'crunchyroll.com', 'funimation.com', 'vudu.com',
       // Adult/vulgar sites
       'pornhub.com', 'xhamster.com', 'xvideos.com', 'redtube.com', 'youporn.com', 'tube8.com',
-      'adultfriendfinder.com', 'ashleymadison.com', 'adultdating.com', 'hookup.com'
+      'adultfriendfinder.com', 'ashleymadison.com', 'adultdating.com', 'hookup.com',
+      'blacked.com', 'tushy.com', 'vixen.com'
     ];
     this.allowedSites = ['stackoverflow.com', 'github.com', 'developer.mozilla.org', 'coursera.org', 'khan-academy.org', 'tue.video.yuja.com'];
     this.focusMode = false;
@@ -259,12 +260,67 @@ class ProductivityGuardian {
     }
     
     this.log(`AI Productivity Guardian v${this.version} initialized`);
+    this.logBlockingKeywordLists();
     
     // Check if focus lock should auto-expire
     this.checkFocusLockExpiry();
     
     // Initialize extension monitoring to prevent disabling
     this.initExtensionMonitoring();
+
+    // Check incognito/private access and warn if disabled
+    this.checkIncognitoAccess();
+  }
+
+  // Warn if the extension isn't allowed in Incognito/Private windows
+  checkIncognitoAccess() {
+    try {
+      if (!chrome.extension || !chrome.extension.isAllowedIncognitoAccess) return;
+      chrome.extension.isAllowedIncognitoAccess(async (isAllowed) => {
+        if (isAllowed) return;
+        try {
+          const { lastIncogWarn } = await chrome.storage.local.get(['lastIncogWarn']);
+          const dayMs = 24 * 60 * 60 * 1000;
+          if (lastIncogWarn && Date.now() - lastIncogWarn < dayMs) return; // avoid spamming
+          await chrome.storage.local.set({ lastIncogWarn: Date.now() });
+        } catch {}
+
+        this.showIncognitoWarning();
+      });
+    } catch {}
+  }
+
+  showIncognitoWarning() {
+    try {
+      const id = 'incognito-warning';
+      chrome.notifications?.create(id, {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: 'Enable extension in Incognito/Private',
+        message: 'To protect you in private windows, enable "Allow in Incognito" on the extensions page.',
+        buttons: [{ title: 'Open Extensions Page' }],
+        priority: 2
+      });
+
+      const openExtensions = async () => {
+        const extId = chrome.runtime.id;
+        const targets = [
+          `chrome://extensions/?id=${extId}`,
+          `brave://extensions/?id=${extId}`,
+          `edge://extensions/?id=${extId}`
+        ];
+        for (const url of targets) {
+          try { await chrome.tabs.create({ url }); break; } catch {}
+        }
+      };
+
+      chrome.notifications?.onButtonClicked.addListener((notifId, btnIdx) => {
+        if (notifId === id && btnIdx === 0) openExtensions();
+      });
+      chrome.notifications?.onClicked.addListener((notifId) => {
+        if (notifId === id) openExtensions();
+      });
+    } catch {}
   }
 
   checkFocusLockExpiry() {
@@ -332,6 +388,13 @@ class ProductivityGuardian {
         } else if (request.action === 'checkApiStatus') {
           await this.checkApiConnection();
           sendResponse({ working: this.apiWorking, lastCheck: this.lastApiCheck });
+        } else if (request.action === 'getAmsterdamHour') {
+          try {
+            const hour = await this.getAmsterdamHour();
+            sendResponse({ hour });
+          } catch (e) {
+            sendResponse({ error: String(e) });
+          }
         } else if (request.action === 'requestBypass') {
           const granted = await this.evaluateJustification(request.justification);
           if (granted && sender?.tab?.url) {
@@ -728,6 +791,23 @@ Respond in JSON format:
       const hostname = new URL(url).hostname;
       this.log('🏠 Hostname:', hostname);
 
+      // Night relax window for Amsterdam: 03:00–06:00 — allow everything except vulgar
+      try {
+        const amsHour = await this.getAmsterdamHour();
+        if (typeof amsHour === 'number' && amsHour >= 3 && amsHour < 6) {
+          const vulgarCheck = this.checkUrlForVulgarContent(url, hostname);
+          if (vulgarCheck.shouldBlock) {
+            this.log('🚫 BLOCKING (night vulgar):', vulgarCheck);
+            await this.blockTab(tabId, hostname, 'Vulgar content (03–06 Amsterdam)');
+            return;
+          }
+          this.log('🌙 03–06 Amsterdam: relaxing rules – allowing non‑vulgar content');
+          return;
+        }
+      } catch (e) {
+        this.log('⚠️ Amsterdam time check failed; proceeding with normal rules', String(e));
+      }
+
       // Check if explicitly allowed
       if (this.allowedSites.some(site => hostname.includes(site))) {
         this.log('✅ ALLOWED: Site is in whitelist');
@@ -876,7 +956,7 @@ URL: ${url}
 Hostname: ${hostname}
 
 Consider these factors:
-- Is it related to entertainment, movies, TV shows, social media, gaming, or streaming?
+- Is it related to movies, TV shows, social media, gaming, or streaming?
 - Is it educational, professional, or work-related?
 - Does the URL suggest productive content like documentation, tutorials, or academic resources?
 
@@ -924,38 +1004,7 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
   checkUrlForMovieContent(url, hostname) {
     const urlLower = (url || '').toLowerCase();
     const hostnameLower = (hostname || '').toLowerCase();
-    
-    // Comprehensive list of movie-related keywords and patterns
-    const movieKeywords = [
-      // Movie streaming sites (exact matches)
-      '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies', 'watchseries',
-      
-      // Movie/film terms (exact matches)
-      'movie', 'movies', 'film', 'films', 'cinema', 'cinematic',
-      
-      // Streaming platforms (exact matches)
-      'netflix', 'hulu', 'disney+', 'disneyplus', 'amazon prime', 'prime',
-      'hbo max', 'hbomax', 'peacock', 'paramount+', 'paramountplus',
-      'apple tv', 'appletv', 'crunchyroll', 'funimation', 'vudu',
-      
-      // Movie-related phrases (exact matches)
-      'watch online', 'free movies', 'hd movies', 'full movie',
-      'movie', 'film',
-      'movie download', 'film download', 'torrent', 'streaming site',
-      
-      // Entertainment terms (exact matches)
-      'entertainment', 'tv shows', 'television', 'series', 'episode',
-      
-      // Common movie site patterns (exact matches)
-      'fullmoviess', 'moviesto', 'watchmovies', 'freemovies', 'hdmovies',
-      'streamingmovies', 'moviehub', 'filmhub', 'cinemahub',
-      
-      // File extensions and formats (exact matches)
-      '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm',
-      
-      // Common movie site domains (exact matches)
-      'movie4k', 'moviehd', 'moviehub', 'filmhub', 'cinemahub'
-    ];
+    const movieKeywords = this.getMovieKeywords();
     
     // Check URL for movie patterns
     const urlHasMovieContent = movieKeywords.some(keyword => urlLower.includes(keyword));
@@ -1002,28 +1051,7 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
   checkUrlForVulgarContent(url, hostname) {
     const urlLower = (url || '').toLowerCase();
     const hostnameLower = (hostname || '').toLowerCase();
-    
-    // Comprehensive list of vulgar/inappropriate keywords and patterns
-    const vulgarKeywords = [
-      // Explicit vulgar terms (exact matches)
-      'fuck', 'shit', 'pussy', 'dick', 'cunt', 'asshole', 'bitch', 'slut',
-      'nigga', 'nigger', 'whore', 'hoe', 'cock', 'penis', 'vagina',
-      
-      // Adult content terms (exact matches)
-      'porn', 'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn',
-      'adult', 'sex', 'sexual', 'nude', 'naked', 'nudity', 'erotic',
-      
-      // Inappropriate content patterns (exact matches)
-      'xxx', 'x-rated', 'adult content', 'mature content', 'explicit',
-      'nsfw', 'not safe for work', 'adult entertainment', 'adult site',
-      
-      // Common vulgar site patterns (exact matches)
-      'pornhub', 'xhamster', 'xvideos', 'redtube', 'youporn', 'tube8',
-      'adultfriendfinder', 'ashleymadison', 'adult dating', 'hookup',
-      
-      // File extensions for adult content (exact matches)
-      '.xxx', '.adult', '.porn', '.sex'
-    ];
+    const vulgarKeywords = this.getVulgarKeywords();
     
     // Check URL for vulgar patterns
     const urlHasVulgarContent = vulgarKeywords.some(keyword => urlLower.includes(keyword));
@@ -1116,12 +1144,12 @@ Keywords: ${contentData.keywords}
 Content Preview: ${contentData.textContent?.substring(0, 500)}
 
 Is this content likely to be:
-1. Entertainment (movies, TV, social media, gaming, gossip)
+1. (movies, TV, social media, gaming, gossip)
 2. Educational/Professional (learning, work, documentation, tutorials)
 3. News/Information (current events, factual content)
 
 Respond with:
-- "BLOCK" if it's primarily entertainment or distracting
+- "BLOCK" if it's primarily distracting
 - "ALLOW" if it's educational, professional, or useful information
 
 Be strict for productivity - when uncertain, choose BLOCK.`;
