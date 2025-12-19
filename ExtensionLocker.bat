@@ -4,7 +4,7 @@ cls
 title Extension Guardian Folder Locker
 
 :: Base folder where the repo lives – adjust if you move the repo elsewhere
-set "BASE_DIR=C:\Users\muham"
+set "BASE_DIR=C:\Users\wifi stuff\OneDrive - TU Eindhoven"
 
 :: Change this password to your own secure password
 set "PASSWORD=123456"
