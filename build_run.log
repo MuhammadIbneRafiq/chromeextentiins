@@ -1,0 +1,261 @@
+============================================
+ Building Extension Guardian executables...
+============================================
+
+Setting up isolated Python environment...
+Installing required packages (no admin rights needed)...
+Requirement already satisfied: pip in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (25.3)
+Requirement already satisfied: setuptools in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (80.9.0)
+Requirement already satisfied: wheel in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (0.45.1)
+Requirement already satisfied: psutil>=5.9.0 in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (from -r requirements.txt (line 1)) (7.1.3)
+Requirement already satisfied: pystray>=0.19.4 in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (from -r requirements.txt (line 2)) (0.19.5)
+Requirement already satisfied: Pillow>=9.0.0 in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (from -r requirements.txt (line 3)) (12.0.0)
+Requirement already satisfied: pywin32>=227 in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (from -r requirements.txt (line 4)) (311)
+Requirement already satisfied: pyinstaller>=5.0.0 in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (from -r requirements.txt (line 5)) (6.17.0)
+Requirement already satisfied: six in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (from pystray>=0.19.4->-r requirements.txt (line 2)) (1.17.0)
+Requirement already satisfied: altgraph in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (from pyinstaller>=5.0.0->-r requirements.txt (line 5)) (0.17.5)
+Requirement already satisfied: packaging>=22.0 in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (from pyinstaller>=5.0.0->-r requirements.txt (line 5)) (25.0)
+Requirement already satisfied: pefile>=2022.5.30 in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (from pyinstaller>=5.0.0->-r requirements.txt (line 5)) (2024.8.26)
+Requirement already satisfied: pyinstaller-hooks-contrib>=2025.9 in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (from pyinstaller>=5.0.0->-r requirements.txt (line 5)) (2025.11)
+Requirement already satisfied: pywin32-ctypes>=0.2.1 in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (from pyinstaller>=5.0.0->-r requirements.txt (line 5)) (0.2.3)
+Requirement already satisfied: setuptools>=42.0.0 in c:\users\wifi stuff\onedrive - tu eindhoven\chromeextentiins\.build_venv\lib\site-packages (from pyinstaller>=5.0.0->-r requirements.txt (line 5)) (80.9.0)
+
+Stopping any running Guardian processes...
+
+Cleaning previous build artifacts (keeping other executables)...
+Deleting old extension-guardian-desktop.exe...
+
+Building executables...
+Using individual .spec files when present...
+Building extension-guardian-desktop.exe from spec...
+1008 INFO: PyInstaller: 6.17.0, contrib hooks: 2025.11
+1010 INFO: Python: 3.14.0
+1099 INFO: Platform: Windows-11-10.0.26200-SP0
+1099 INFO: Python environment: C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\.build_venv
+1108 INFO: Removing temporary files and cleaning cache in C:\Users\wifi stuff\AppData\Local\pyinstaller
+1114 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins',
+ 'C:\\Python314\\python314.zip',
+ 'C:\\Python314\\DLLs',
+ 'C:\\Python314\\Lib',
+ 'C:\\Python314',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\win32',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\win32\\lib',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\Pythonwin',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins']
+2366 INFO: checking Analysis
+2367 INFO: Building Analysis because Analysis-00.toc is non existent
+2367 INFO: Looking for Python shared library...
+2367 INFO: Using Python shared library: C:\Python314\python314.dll
+2367 INFO: Running Analysis Analysis-00.toc
+2367 INFO: Target bytecode optimization level: 0
+2367 INFO: Initializing module dependency graph...
+2374 INFO: Initializing module graph hook caches...
+2559 INFO: Analyzing modules for base_library.zip ...
+8593 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+24348 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+24419 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+25122 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+32875 INFO: Caching module dependency graph...
+33082 INFO: Analyzing C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\extension-guardian-desktop.py
+33302 INFO: Processing standard module hook 'hook-pystray.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+34690 INFO: Processing pre-safe-import-module hook 'hook-six.moves.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+35160 INFO: Processing pre-safe-import-module hook 'hook-gi.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\.build_venv\Lib\site-packages\pystray\_util\gtk.py:53: SyntaxWarning: 'return' in a 'finally' block
+  return False
+35259 INFO: Processing standard module hook 'hook-PIL.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+35418 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+36321 INFO: Processing standard module hook 'hook-PIL.Image.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+37954 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+38093 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+38831 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+40107 INFO: Processing pre-find-module-path hook 'hook-tkinter.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+40127 INFO: TclTkInfo: initializing cached Tcl/Tk info...
+41927 INFO: Processing standard module hook 'hook-_tkinter.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+42498 INFO: Processing standard module hook 'hook-psutil.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+43015 INFO: Processing module hooks (post-graph stage)...
+44469 INFO: Processing standard module hook 'hook-PIL.SpiderImagePlugin.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+44781 INFO: Processing standard module hook 'hook-_tkinter.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+44809 INFO: Performing binary vs. data reclassification (927 entries)
+45483 INFO: Looking for ctypes DLLs
+45572 INFO: Analyzing run-time hooks ...
+45577 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+45590 INFO: Including run-time hook 'pyi_rth__tkinter.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+45685 INFO: Creating base_library.zip...
+45767 INFO: Looking for dynamic libraries
+46525 INFO: Extra DLL search directories (AddDllDirectory): []
+46525 INFO: Extra DLL search directories (PATH): []
+47463 INFO: Warnings written to C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\build\extension-guardian-desktop\warn-extension-guardian-desktop.txt
+47529 INFO: Graph cross-reference written to C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\build\extension-guardian-desktop\xref-extension-guardian-desktop.html
+47651 INFO: checking PYZ
+47651 INFO: Building PYZ because PYZ-00.toc is non existent
+47652 INFO: Building PYZ (ZlibArchive) C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\build\extension-guardian-desktop\PYZ-00.pyz
+48182 INFO: Building PYZ (ZlibArchive) C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\build\extension-guardian-desktop\PYZ-00.pyz completed successfully.
+48286 INFO: checking PKG
+48287 INFO: Building PKG because PKG-00.toc is non existent
+48289 INFO: Building PKG (CArchive) extension-guardian-desktop.pkg
+53247 INFO: Building PKG (CArchive) extension-guardian-desktop.pkg completed successfully.
+53301 INFO: Bootloader C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\.build_venv\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\runw.exe
+53301 INFO: checking EXE
+53302 INFO: Building EXE because EXE-00.toc is non existent
+53302 INFO: Building EXE from EXE-00.toc
+53302 INFO: Copying bootloader EXE to C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\dist\extension-guardian-desktop.exe
+53331 INFO: Copying icon to EXE
+53540 INFO: Copying 0 resources to EXE
+53540 INFO: Embedding manifest in EXE
+53558 INFO: Appending PKG archive to EXE
+53781 INFO: Fixing EXE headers
+58855 INFO: Building EXE from EXE-00.toc completed successfully.
+58882 INFO: Build complete! The results are available in: C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\dist
+Building extension_guardian_service.exe from spec...
+461 INFO: PyInstaller: 6.17.0, contrib hooks: 2025.11
+461 INFO: Python: 3.14.0
+517 INFO: Platform: Windows-11-10.0.26200-SP0
+518 INFO: Python environment: C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\.build_venv
+521 INFO: Removing temporary files and cleaning cache in C:\Users\wifi stuff\AppData\Local\pyinstaller
+527 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins',
+ 'C:\\Python314\\python314.zip',
+ 'C:\\Python314\\DLLs',
+ 'C:\\Python314\\Lib',
+ 'C:\\Python314',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\win32',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\win32\\lib',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\Pythonwin',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins']
+1320 INFO: checking Analysis
+1320 INFO: Building Analysis because Analysis-00.toc is non existent
+1320 INFO: Looking for Python shared library...
+1320 INFO: Using Python shared library: C:\Python314\python314.dll
+1320 INFO: Running Analysis Analysis-00.toc
+1320 INFO: Target bytecode optimization level: 0
+1320 INFO: Initializing module dependency graph...
+1324 INFO: Initializing module graph hook caches...
+1377 INFO: Analyzing modules for base_library.zip ...
+7029 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+8568 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+16196 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+16230 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+17413 INFO: Caching module dependency graph...
+17470 INFO: Analyzing C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\extension_guardian_service.py
+17570 INFO: Processing standard module hook 'hook-pywintypes.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+19268 INFO: Processing standard module hook 'hook-psutil.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+19461 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+19597 INFO: Processing module hooks (post-graph stage)...
+19644 INFO: Performing binary vs. data reclassification (2 entries)
+19649 INFO: Looking for ctypes DLLs
+19684 INFO: Analyzing run-time hooks ...
+19686 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+19697 INFO: Including run-time hook 'pyi_rth_pywintypes.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\rthooks'
+19705 INFO: Creating base_library.zip...
+19761 INFO: Looking for dynamic libraries
+20162 INFO: Extra DLL search directories (AddDllDirectory): []
+20163 INFO: Extra DLL search directories (PATH): []
+20827 INFO: Warnings written to C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\build\extension_guardian_service\warn-extension_guardian_service.txt
+20866 INFO: Graph cross-reference written to C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\build\extension_guardian_service\xref-extension_guardian_service.html
+20910 INFO: checking PYZ
+20910 INFO: Building PYZ because PYZ-00.toc is non existent
+20910 INFO: Building PYZ (ZlibArchive) C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\build\extension_guardian_service\PYZ-00.pyz
+21320 INFO: Building PYZ (ZlibArchive) C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\build\extension_guardian_service\PYZ-00.pyz completed successfully.
+21364 INFO: checking PKG
+21365 INFO: Building PKG because PKG-00.toc is non existent
+21365 INFO: Building PKG (CArchive) extension_guardian_service.pkg
+23512 INFO: Building PKG (CArchive) extension_guardian_service.pkg completed successfully.
+23517 INFO: Bootloader C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\.build_venv\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\run.exe
+23517 INFO: checking EXE
+23517 INFO: Building EXE because EXE-00.toc is non existent
+23518 INFO: Building EXE from EXE-00.toc
+23518 INFO: Copying bootloader EXE to C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\dist\extension_guardian_service.exe
+23654 INFO: Copying icon to EXE
+23760 INFO: Copying 0 resources to EXE
+23760 INFO: Embedding manifest in EXE
+23866 INFO: Appending PKG archive to EXE
+24010 INFO: Fixing EXE headers
+27218 INFO: Building EXE from EXE-00.toc completed successfully.
+27226 INFO: Build complete! The results are available in: C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\dist
+Building guardian_watchdog.exe from spec...
+417 INFO: PyInstaller: 6.17.0, contrib hooks: 2025.11
+417 INFO: Python: 3.14.0
+473 INFO: Platform: Windows-11-10.0.26200-SP0
+473 INFO: Python environment: C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\.build_venv
+476 INFO: Removing temporary files and cleaning cache in C:\Users\wifi stuff\AppData\Local\pyinstaller
+480 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins',
+ 'C:\\Python314\\python314.zip',
+ 'C:\\Python314\\DLLs',
+ 'C:\\Python314\\Lib',
+ 'C:\\Python314',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\win32',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\win32\\lib',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU '
+ 'Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\Pythonwin',
+ 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins']
+1164 INFO: checking Analysis
+1164 INFO: Building Analysis because Analysis-00.toc is non existent
+1164 INFO: Looking for Python shared library...
+1164 INFO: Using Python shared library: C:\Python314\python314.dll
+1164 INFO: Running Analysis Analysis-00.toc
+1164 INFO: Target bytecode optimization level: 0
+1164 INFO: Initializing module dependency graph...
+1166 INFO: Initializing module graph hook caches...
+1194 INFO: Analyzing modules for base_library.zip ...
+5315 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+6459 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+7479 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+7511 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+15389 INFO: Caching module dependency graph...
+15529 INFO: Analyzing C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\guardian_watchdog.py
+15732 INFO: Processing standard module hook 'hook-psutil.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+15861 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks'
+15956 INFO: Processing module hooks (post-graph stage)...
+15983 INFO: Performing binary vs. data reclassification (1 entries)
+15985 INFO: Looking for ctypes DLLs
+16017 INFO: Analyzing run-time hooks ...
+16018 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\wifi stuff\\OneDrive - TU Eindhoven\\chromeextentiins\\.build_venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+16035 INFO: Creating base_library.zip...
+16097 INFO: Looking for dynamic libraries
+16480 INFO: Extra DLL search directories (AddDllDirectory): []
+16480 INFO: Extra DLL search directories (PATH): []
+16834 INFO: Warnings written to C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\build\guardian_watchdog\warn-guardian_watchdog.txt
+16869 INFO: Graph cross-reference written to C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\build\guardian_watchdog\xref-guardian_watchdog.html
+16911 INFO: checking PYZ
+16911 INFO: Building PYZ because PYZ-00.toc is non existent
+16911 INFO: Building PYZ (ZlibArchive) C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\build\guardian_watchdog\PYZ-00.pyz
+17180 INFO: Building PYZ (ZlibArchive) C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\build\guardian_watchdog\PYZ-00.pyz completed successfully.
+17204 INFO: checking PKG
+17204 INFO: Building PKG because PKG-00.toc is non existent
+17204 INFO: Building PKG (CArchive) guardian_watchdog.pkg
+18999 INFO: Building PKG (CArchive) guardian_watchdog.pkg completed successfully.
+19001 INFO: Bootloader C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\.build_venv\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\run.exe
+19002 INFO: checking EXE
+19002 INFO: Building EXE because EXE-00.toc is non existent
+19002 INFO: Building EXE from EXE-00.toc
+19002 INFO: Copying bootloader EXE to C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\dist\guardian_watchdog.exe
+19131 INFO: Copying icon to EXE
+19234 INFO: Copying 0 resources to EXE
+19234 INFO: Embedding manifest in EXE
+19323 INFO: Appending PKG archive to EXE
+19419 INFO: Fixing EXE headers
+21818 INFO: Building EXE from EXE-00.toc completed successfully.
+21821 INFO: Build complete! The results are available in: C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins\dist
+... was unexpected at this time.

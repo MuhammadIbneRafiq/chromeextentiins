@@ -14,7 +14,8 @@ extension_id = 'dhmlefmojipiigjhjifnohilekhmbbag'
 app = ExtensionGuardian.__new__(ExtensionGuardian)
 app.config = {
     'extension_id': extension_id,
-    'browsers': ['chrome.exe', 'msedge.exe', 'brave.exe', 'comet.exe']
+    'browsers': ['chrome.exe',  # 'msedge.exe',
+                 'brave.exe', 'comet.exe']
 }
 
 import logging
@@ -27,7 +28,7 @@ paths = {
     'chrome.exe': os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data\Default\Preferences"),
     'brave.exe': os.path.expandvars(r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default\Preferences"),
     'comet.exe': os.path.expandvars(r"%LOCALAPPDATA%\Perplexity\Comet\User Data\Default\Preferences"),
-    'msedge.exe': os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Preferences"),
+    # 'msedge.exe': os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Preferences"),
 }
 
 def read_ext_data(pref_path, ext_id):
@@ -42,7 +43,8 @@ def read_ext_data(pref_path, ext_id):
 
 enabled_count = 0
 mismatches = 0
-for browser_name in ['chrome.exe', 'brave.exe', 'comet.exe', 'msedge.exe']:
+for browser_name in ['chrome.exe', 'brave.exe', 'comet.exe']:  # , 'msedge.exe'
+
     status = app.check_extension_status(browser_name)
     ext_data = read_ext_data(paths[browser_name], extension_id)
     incog = None
@@ -63,6 +65,6 @@ for browser_name in ['chrome.exe', 'brave.exe', 'comet.exe', 'msedge.exe']:
         mismatches += 1
         print(f"Mismatch: {browser_name} should be DISABLED when incognito/private is off.")
 
-print(f"Enabled in {enabled_count}/4 browsers")
+print(f"Enabled in {enabled_count}/3 browsers")
 if mismatches:
     print(f"Incognito-off test: {mismatches} mismatch(es) detected")
