@@ -371,7 +371,7 @@ class ExtensionGuardian:
             'protection_duration_hours': 24,
             'check_interval_seconds': 1,  # Faster detection
             'warning_countdown_seconds': 15,
-            'browsers': ['chrome.exe', 'brave.exe', 'comet.exe']
+            'browsers': ['chrome.exe', 'msedge.exe', 'brave.exe', 'comet.exe']
         }
         
         self.is_monitoring = False
@@ -673,6 +673,10 @@ class ExtensionGuardian:
                 {
                     'name': 'Brave',
                     'path': r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default"
+                },
+                {
+                    'name': 'Edge',
+                    'path': r"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default"
                 },
                 {
                     'name': 'Comet',
@@ -996,8 +1000,7 @@ To prevent this:
             self.config['monitoring_enabled'] = True
             self.config['browser_close_enabled'] = True
             # Enforce the supported Chromium browsers only (remove Firefox etc.)
-            self.config['browsers'] = ['chrome.exe', 
-                                       'brave.exe', 'comet.exe']
+            self.config['browsers'] = ['chrome.exe', 'msedge.exe', 'brave.exe', 'comet.exe']
             # Always enforce 1s check interval
             self.config['check_interval_seconds'] = 1
             # Ensure countdown is at least 15 seconds as required
