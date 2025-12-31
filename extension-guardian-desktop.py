@@ -95,12 +95,14 @@ def _is_incognito_allowed(ext_settings_obj):
     return False
 
 def _scan_profiles_for_ext_status(base_user_data_path, extension_id, logger):
-    """Return (status, reason) tuple: status True if enabled, False if disabled with explanation."""
+    """Return True if extension is enabled (incognito/private allowed) across profiles; False if disabled/blocked."""
     try:
         enabled_candidate = False
         found_any = False
+
         if not os.path.isdir(base_user_data_path):
-            return False, "Browser user data path not found"
+            logger.warning(f"[SCAN FALSE] Base path missing: {base_user_data_path}")
+            return False
 
         for name in os.listdir(base_user_data_path):
             profile_dir = os.path.join(base_user_data_path, name)
@@ -118,41 +120,53 @@ def _scan_profiles_for_ext_status(base_user_data_path, extension_id, logger):
                     prefs = json.load(f)
                 ext_data = prefs.get('extensions', {}).get('settings', {}).get(extension_id)
                 if not ext_data:
+                    logger.debug(f"[SCAN] Extension {extension_id} not found in profile '{name}'")
                     continue
 
                 found_any = True
-
-                if ext_data.get('state') == 0:
-                    reason = f"Extension state=0 in profile '{name}'"
-                    logger.warning(f"Extension {extension_id} DISABLED (state=0) in profile '{name}'")
-                    return False, reason
-
+                state_val = ext_data.get('state')
+                incog_val = ext_data.get('incognito')
+                allow_incog = ext_data.get('allow_in_incognito')
                 disable_reasons = ext_data.get('disable_reasons', [])
+                logger.info(
+                    f"[SCAN] Profile '{name}': state={state_val}, incognito={incog_val}, "
+                    f"allow_in_incognito={allow_incog}, disable_reasons={disable_reasons}"
+                )
+
+                if state_val == 0:
+                    logger.warning(f"[SCAN FALSE] Extension {extension_id} DISABLED (state=0) in profile '{name}'")
+                    return False
+
                 if disable_reasons:
-                    reason = f"Extension has disable_reasons={disable_reasons} in profile '{name}'"
-                    logger.warning(f"Extension {extension_id} DISABLED (disable_reasons={disable_reasons}) in profile '{name}'")
-                    return False, reason
+                    logger.warning(
+                        f"[SCAN FALSE] Extension {extension_id} DISABLED (disable_reasons={disable_reasons}) "
+                        f"in profile '{name}'"
+                    )
+                    return False
 
                 if not _is_incognito_allowed(ext_data):
-                    reason = f"Extension not allowed in private/incognito in profile '{name}'"
-                    logger.warning(f"Extension {extension_id} not allowed in private/incognito in profile '{name}'")
-                    return False, reason
+                    logger.warning(
+                        f"[SCAN FALSE] Extension {extension_id} not allowed in private/incognito in profile '{name}' "
+                        f"(incognito={incog_val}, allow_in_incognito={allow_incog})"
+                    )
+                    return False
 
                 enabled_candidate = True
             except Exception as e:
-                logger.debug(f"Error reading Preferences for profile '{name}': {e}")
+                logger.debug(f"[SCAN] Error reading Preferences for profile '{name}': {e}")
                 continue
 
         if not found_any:
-            return False, "Extension not found in any browser profile"
+            logger.warning(f"[SCAN FALSE] Extension {extension_id} not present in any profile under {base_user_data_path}")
+            return False
 
-        return enabled_candidate, None
+        return enabled_candidate
     except Exception as e:
         try:
             logger.error(f"Error scanning profiles: {e}")
         except Exception:
             pass
-        return False, f"Exception while checking: {str(e)}"
+        return False
 
 def extract_exe_from_command(command):
     try:
@@ -615,11 +629,11 @@ class ExtensionGuardian:
                         'exe': proc.info['exe']
                     })
                     
-                    extension_enabled, reason = self.check_extension_status(proc.info['name'])
+                    extension_enabled = self.check_extension_status(proc.info['name'])
                     any_check_performed = True
                     if not extension_enabled:
                         any_disabled = True
-                        self.logger.warning(f"EXTENSION DISABLED in {proc.info['name']} (PID: {proc.info['pid']}) - reason: {reason}")
+                        self.logger.warning(f"EXTENSION DISABLED in {proc.info['name']} (PID: {proc.info['pid']})")
                     else:
                         any_enabled = True
                         self.logger.info(f"Extension enabled in {proc.info['name']} (PID: {proc.info['pid']})")
@@ -667,19 +681,19 @@ class ExtensionGuardian:
             browsers_to_check = [
                 {
                     'name': 'Chrome',
-                    'path': r"%LOCALAPPDATA%\Google\Chrome\User Data"
+                    'path': r"%LOCALAPPDATA%\Google\Chrome\User Data\Default"
                 },
                 {
                     'name': 'Brave',
-                    'path': r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data"
+                    'path': r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default"
                 },
                 {
                     'name': 'Edge',
-                    'path': r"%LOCALAPPDATA%\Microsoft\Edge\User Data"
+                    'path': r"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default"
                 },
                 {
                     'name': 'Comet',
-                    'path': r"%LOCALAPPDATA%\Perplexity\Comet\User Data"
+                    'path': r"%LOCALAPPDATA%\Perplexity\Comet\User Data\Default"
                 }
             ]
             
@@ -689,121 +703,6 @@ class ExtensionGuardian:
                 try:
                     browser_path = os.path.expandvars(browser['path'])
                     
-                    # Check 1: Look for direct disabled state file in local storage
-                    local_storage_path = os.path.join(browser_path, "Local Storage", "leveldb")
-                    if os.path.exists(local_storage_path):
-                        # Check for guardian detection files
-                        guardian_file = os.path.join(local_storage_path, "guardianDetectedDisabled")
-                        if os.path.exists(guardian_file):
-                            self.logger.warning(f"Guardian detected extension disabled marker found in {browser['name']}")
-                            return True
-                    
-                    # Check 2: Look in extension storage
-                    ext_storage_path = os.path.join(browser_path, "Storage", "ext", extension_id)
-                    if os.path.exists(ext_storage_path):
-                        disabled_marker = os.path.join(ext_storage_path, "extensionDisabled")
-                        if os.path.exists(disabled_marker):
-                            self.logger.warning(f"Extension disabled marker found in {browser['name']} storage")
-                            return True
-                            
-                    # Check 3: Look for extension state in preferences
-                    prefs_path = os.path.join(browser_path, "Preferences")
-                    if os.path.exists(prefs_path):
-                        try:
-                            with open(prefs_path, 'r', encoding='utf-8') as f:
-                                prefs_data = json.load(f)
-                                
-                            # Check for disabled state in local storage section
-                            local_storage = prefs_data.get('local_storage', {})
-                            if local_storage:
-                                for key, value in local_storage.items():
-                                    if 'extensionDisabled' in key and value:
-                                        self.logger.warning(f"Extension disabled marker found in {browser['name']} preferences")
-                                        return True
-                        except:
-                            pass
-                            
-                except Exception as e:
-                    self.logger.error(f"Error checking {browser['name']} for disabled indicators: {e}")
-                    
-            return False
-        except Exception as e:
-            self.logger.error(f"Error in check_direct_disabled_indicators: {e}")
-            return False
-    
-    def check_extension_status(self, browser_name):
-        try:
-            browser_key = browser_name.lower().replace('.exe', '')
-            status = True
-            reason = None
-
-            if 'chrome' in browser_key:
-                status, reason = self.check_chrome_extension_status()
-            elif 'edge' in browser_key:
-                status, reason = self.check_edge_extension_status()
-            elif 'brave' in browser_key:
-                status, reason = self.check_brave_extension_status()
-            elif 'comet' in browser_key:
-                status, reason = self.check_comet_extension_status()
-            else:
-                self.logger.warning(f"Unknown browser: {browser_name}")
-                return True, None
-
-            if not status and reason:
-                self.logger.error(f"Extension disabled in {browser_name}: {reason}")
-            return status, reason
-        except Exception as e:
-            self.logger.error(f"Error checking extension status for {browser_name}: {e}")
-            return True, f"Error checking {browser_name}: {e}"
-    
-    def check_chrome_extension_status(self):
-        try:
-            extension_id = self.config['extension_id']
-            base = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data")
-            status, reason = _scan_profiles_for_ext_status(base, extension_id, self.logger)
-            self.logger.info(f"Chrome status (profiles)={status} reason={reason}")
-            return status, reason
-        except Exception as e:
-            self.logger.error(f"Error checking Chrome extension status: {e}")
-            return False, f"Chrome check failed: {e}"
-    
-    def check_edge_extension_status(self):
-        try:
-            extension_id = self.config['extension_id']
-            base = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\User Data")
-            status, reason = _scan_profiles_for_ext_status(base, extension_id, self.logger)
-            self.logger.info(f"Edge status (profiles)={status} reason={reason}")
-            return status, reason
-        except Exception as e:
-            self.logger.error(f"Error checking Edge extension: {e}")
-            return False, f"Edge check failed: {e}"
-    
-    def check_comet_extension_status(self):
-        try:
-            extension_id = self.config['extension_id']
-            base = os.path.expandvars(r"%LOCALAPPDATA%\Perplexity\Comet\User Data")
-            status, reason = _scan_profiles_for_ext_status(base, extension_id, self.logger)
-            self.logger.info(f"Comet status (profiles)={status} reason={reason}")
-            return status, reason
-        except Exception as e:
-            self.logger.error(f"Error checking Comet extension status: {e}")
-            return False, f"Comet check failed: {e}"
-    
-    def check_brave_extension_status(self):
-        try:
-            extension_id = self.config['extension_id']
-            base = os.path.expandvars(r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data")
-            status, reason = _scan_profiles_for_ext_status(base, extension_id, self.logger)
-            self.logger.info(f"Brave status (profiles)={status} reason={reason}")
-            return status, reason
-        except Exception as e:
-            self.logger.error(f"Error checking Brave extension status: {e}")
-            return False, f"Brave check failed: {e}"
-    
-    def handle_extension_disabled(self, disable_reason=None):
-        # Prevent multiple simultaneous shutdown attempts
-        if self.shutdown_in_progress:
-            self.logger.debug("Shutdown already in progress, skipping duplicate trigger")
             return
         
         # Check if we recently shut down (within last 60 seconds)
@@ -814,36 +713,27 @@ class ExtensionGuardian:
                 return
         
         self.shutdown_in_progress = True
-        reason_str = f" - Reason: {disable_reason}" if disable_reason else ""
-        self.logger.warning(f"Starting shutdown sequence for disabled extension{reason_str}")
-        
-        # Record the reason in a dedicated log file for historical analysis
-        try:
-            disable_log_path = Path.home() / "ExtensionGuardian" / "logs" / "disable_reasons.log"
-            with open(disable_log_path, 'a') as f:
-                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                f.write(f"{timestamp} - Extension disabled{reason_str}\n")
-        except Exception as e:
-            self.logger.error(f"Failed to log disable reason: {e}")
-        
-        self.show_extension_disabled_warning(disable_reason)
-        threading.Thread(target=self.countdown_and_close_browsers, daemon=True).start()  
+        self.logger.warning("Starting shutdown sequence for disabled extension")
+        self.show_extension_disabled_warning()
+        threading.Thread(target=self.countdown_and_close_browsers, daemon=True).start()
     
-    def show_extension_disabled_warning(self, reason=None):
+    def show_extension_disabled_warning(self):
         def show_warning():
-            reason_str = f"\n\nDisabled reason: {reason}" if reason else ""
             warning_msg = f"""
-    Your extension ({self.config['extension_id']}) has been disabled in one or more browsers.{reason_str}
-    Action: All browser windows will close in {self.config['warning_countdown_seconds']} seconds to protect your browsing session.
-    To prevent this:
-    1. Re-enable the extension in your browser
-    2. Check Extensions page (chrome://extensions/ or brave://extensions/)
-    3. Restart Extension Guardian monitoring
-    """
+Your extension ({self.config['extension_id']}) has been disabled in one or more browsers.
+
+Action: All browser windows will close in {self.config['warning_countdown_seconds']} seconds to protect your browsing session.
+
+To prevent this:
+1. Re-enable the extension in your browser
+2. Check Extensions page (chrome://extensions/ or brave://extensions/)
+3. Restart Extension Guardian monitoring
+"""
             try:
                 messagebox.showwarning("Extension Guardian - Extension Disabled", warning_msg)
             except:
-                self.logger.warning("Extension disabled - GUI not available for dialog")     
+                self.logger.warning("Extension disabled - GUI not available for dialog")
+        
         try:
             self.root.after(0, show_warning)
         except:
@@ -872,51 +762,23 @@ class ExtensionGuardian:
             self.shutdown_in_progress = False
             self.logger.info("Shutdown sequence completed, monitoring will continue")
     
-    # def close_all_browsers(self):
-    #     closed_total = 0
-    #     known_set = set(n.lower() for n in KNOWN_BROWSER_EXE_NAMES)
-    #     seen_images = set()
-
-    #     for proc in psutil.process_iter(['pid', 'name']):
-    #         try:
-    #             name_lower = (proc.info['name'] or '').lower()
-    #             if name_lower and name_lower in known_set and name_lower not in seen_images:
-    #                 killed = kill_processes_for_exe(proc.info['name'], logger=self.logger)
-    #                 closed_total += killed
-    #                 seen_images.add(name_lower)
-    #         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-    #             pass
-
-    #     self.logger.info(f"Closed {closed_total} browser process(es)")
-
     def close_all_browsers(self):
         closed_total = 0
-        allowed_set = set(b.lower() for b in self.config['browsers'])
         known_set = set(n.lower() for n in KNOWN_BROWSER_EXE_NAMES)
-        non_allowed_set = known_set - allowed_set  # Only close browsers NOT in allowed list
         seen_images = set()
-        
-        # Add explicit exclusion for Teams and Outlook
-        exclusion_keywords = ['teams', 'outlook', 'office']
-        
+
         for proc in psutil.process_iter(['pid', 'name']):
             try:
                 name_lower = (proc.info['name'] or '').lower()
-                # Skip if name contains any exclusion keywords
-                if any(keyword in name_lower for keyword in exclusion_keywords):
-                    continue
-                    
-                # Only kill browsers in the non-allowed set
-                if name_lower and name_lower in non_allowed_set and name_lower not in seen_images:
-                    self.logger.info(f"Closing unauthorized browser: {proc.info['name']}")
+                if name_lower and name_lower in known_set and name_lower not in seen_images:
                     killed = kill_processes_for_exe(proc.info['name'], logger=self.logger)
                     closed_total += killed
                     seen_images.add(name_lower)
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    pass
+                pass
 
-            self.logger.info(f"Closed {closed_total} browser process(es)")
-        
+        self.logger.info(f"Closed {closed_total} browser process(es)")
+
     def ensure_all_browsers_blocked(self):
         """Discover installed browsers and enforce blocks immediately."""
         return ensure_block_all_browsers(logger=self.logger)
