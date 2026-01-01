@@ -1,0 +1,171 @@
+PS C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins> python .\extension-guardian-desktop.py
+2026-01-01 03:21:56,117 - INFO - Startup registration ensured (HKCU Run)
+2026-01-01 03:21:56,152 - INFO - System tray icon created successfully
+2026-01-01 03:21:56,396 - DEBUG - Importing AvifImagePlugin
+2026-01-01 03:21:56,480 - DEBUG - Importing BlpImagePlugin
+2026-01-01 03:21:56,487 - DEBUG - Importing BmpImagePlugin
+2026-01-01 03:21:56,487 - DEBUG - Importing BufrStubImagePlugin
+2026-01-01 03:21:56,497 - DEBUG - Importing CurImagePlugin
+2026-01-01 03:21:56,508 - DEBUG - Importing DcxImagePlugin
+2026-01-01 03:21:56,523 - DEBUG - Importing DdsImagePlugin
+2026-01-01 03:21:56,545 - DEBUG - Importing EpsImagePlugin
+2026-01-01 03:21:56,550 - DEBUG - Importing FitsImagePlugin
+2026-01-01 03:21:56,572 - DEBUG - Importing FliImagePlugin
+2026-01-01 03:21:56,581 - DEBUG - Importing FpxImagePlugin
+2026-01-01 03:21:56,598 - DEBUG - Image: failed to import FpxImagePlugin: No module named 'olefile'
+2026-01-01 03:21:56,603 - DEBUG - Importing FtexImagePlugin
+2026-01-01 03:21:56,616 - DEBUG - Importing GbrImagePlugin
+2026-01-01 03:21:56,627 - DEBUG - Importing GifImagePlugin
+2026-01-01 03:21:56,631 - DEBUG - Importing GribStubImagePlugin
+2026-01-01 03:21:56,640 - DEBUG - Importing Hdf5StubImagePlugin
+2026-01-01 03:21:56,651 - DEBUG - Importing IcnsImagePlugin
+2026-01-01 03:21:56,675 - DEBUG - Importing IcoImagePlugin
+2026-01-01 03:21:56,686 - DEBUG - Importing ImImagePlugin
+2026-01-01 03:21:56,699 - DEBUG - Importing ImtImagePlugin
+2026-01-01 03:21:56,711 - DEBUG - Importing IptcImagePlugin
+2026-01-01 03:21:56,715 - DEBUG - Importing JpegImagePlugin
+2026-01-01 03:21:56,719 - DEBUG - Importing Jpeg2KImagePlugin
+2026-01-01 03:21:56,723 - DEBUG - Importing McIdasImagePlugin
+2026-01-01 03:21:56,730 - DEBUG - Importing MicImagePlugin
+2026-01-01 03:21:56,735 - DEBUG - Image: failed to import MicImagePlugin: No module named 'olefile'
+2026-01-01 03:21:56,736 - DEBUG - Importing MpegImagePlugin
+2026-01-01 03:21:56,741 - DEBUG - Importing MpoImagePlugin
+2026-01-01 03:21:56,761 - DEBUG - Importing MspImagePlugin
+2026-01-01 03:21:56,763 - DEBUG - Importing PalmImagePlugin
+2026-01-01 03:21:56,767 - DEBUG - Importing PcdImagePlugin
+2026-01-01 03:21:56,772 - DEBUG - Importing PcxImagePlugin
+2026-01-01 03:21:56,772 - DEBUG - Importing PdfImagePlugin
+2026-01-01 03:21:56,799 - DEBUG - Importing PixarImagePlugin
+2026-01-01 03:21:56,802 - DEBUG - Importing PngImagePlugin
+2026-01-01 03:21:56,803 - DEBUG - Importing PpmImagePlugin
+2026-01-01 03:21:56,803 - DEBUG - Importing PsdImagePlugin
+2026-01-01 03:21:56,806 - DEBUG - Importing QoiImagePlugin
+2026-01-01 03:21:56,809 - DEBUG - Importing SgiImagePlugin
+2026-01-01 03:21:56,812 - DEBUG - Importing SpiderImagePlugin
+2026-01-01 03:21:56,815 - DEBUG - Importing SunImagePlugin
+2026-01-01 03:21:56,818 - DEBUG - Importing TgaImagePlugin
+2026-01-01 03:21:56,821 - DEBUG - Importing TiffImagePlugin
+2026-01-01 03:21:56,821 - DEBUG - Importing WebPImagePlugin
+2026-01-01 03:21:56,898 - DEBUG - Importing WmfImagePlugin
+2026-01-01 03:21:56,902 - DEBUG - Importing XbmImagePlugin
+2026-01-01 03:21:56,906 - DEBUG - Importing XpmImagePlugin
+2026-01-01 03:21:56,909 - DEBUG - Importing XVThumbImagePlugin
+2026-01-01 03:27:47,734 - DEBUG - [SCAN] Error reading Preferences for profile 'Default': [Errno 13] Permission denied: 'C:\\Users\\wifi stuff\\AppData\\Local\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Preferences'
+2026-01-01 03:27:47,735 - DEBUG - [SCAN] Error reading Preferences for profile 'Default': [Errno 13] Permission denied: 'C:\\Users\\wifi stuff\\AppData\\Local\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Preferences'
+2026-01-01 03:27:47,736 - WARNING - [SCAN FALSE] Extension dhmlefmojipiigjhjifnohilekhmbbag not present in any profile under C:\Users\wifi stuff\AppData\Local\BraveSoftware\Brave-Browser\User Data
+2026-01-01 03:27:47,736 - WARNING - EXTENSION DISABLED in brave.exe (PID: 16704)
+2026-01-01 03:27:47,737 - WARNING - [SCAN FALSE] Extension dhmlefmojipiigjhjifnohilekhmbbag not present in any profile under C:\Users\wifi stuff\AppData\Local\BraveSoftware\Brave-Browser\User Data
+2026-01-01 03:27:47,738 - WARNING - EXTENSION DISABLED in brave.exe (PID: 16612)
+2026-01-01 03:27:47,832 - DEBUG - [CHECK CYCLE] Complete - Browsers found: 38, Checks performed: True, Extension disabled: True
+2026-01-01 03:27:47,832 - WARNING - EXTENSION DISABLED DETECTED - TRIGGERING BROWSER SHUTDOWN
+2026-01-01 03:27:47,832 - WARNING - No log buffer available for snapshot.
+2026-01-01 03:27:47,833 - WARNING - Starting shutdown sequence for disabled extension
+2026-01-01 03:27:47,835 - INFO - Closing browsers in 15 seconds...
+2026-01-01 03:27:47,836 - DEBUG - [CHECK CYCLE] Complete - Browsers found: 38, Checks performed: True, Extension disabled: True
+2026-01-01 03:27:47,836 - WARNING - EXTENSION DISABLED DETECTED - TRIGGERING BROWSER SHUTDOWN
+2026-01-01 03:27:47,836 - WARNING - No log buffer available for snapshot.
+2026-01-01 03:27:47,837 - WARNING - Starting shutdown sequence for disabled extension
+2026-01-01 03:27:47,837 - INFO - Closing browsers in 15 seconds...
+2026-01-01 03:27:48,835 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:48,836 - INFO - Closing browsers in 14 seconds...
+2026-01-01 03:27:48,838 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:48,839 - INFO - Closing browsers in 14 seconds...
+2026-01-01 03:27:49,837 - INFO - Closing browsers in 13 seconds...
+2026-01-01 03:27:49,840 - INFO - Closing browsers in 13 seconds...
+2026-01-01 03:27:50,045 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:50,048 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:50,838 - INFO - Closing browsers in 12 seconds...
+2026-01-01 03:27:50,841 - INFO - Closing browsers in 12 seconds...
+2026-01-01 03:27:51,218 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:51,220 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:51,840 - INFO - Closing browsers in 11 seconds...
+2026-01-01 03:27:51,843 - INFO - Closing browsers in 11 seconds...
+2026-01-01 03:27:52,405 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:52,406 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:52,841 - INFO - Closing browsers in 10 seconds...
+2026-01-01 03:27:52,844 - INFO - Closing browsers in 10 seconds...
+2026-01-01 03:27:53,551 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:53,552 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:53,842 - INFO - Closing browsers in 9 seconds...
+2026-01-01 03:27:53,846 - INFO - Closing browsers in 9 seconds...
+2026-01-01 03:27:54,727 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:54,731 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:54,843 - INFO - Closing browsers in 8 seconds...
+2026-01-01 03:27:54,848 - INFO - Closing browsers in 8 seconds...
+2026-01-01 03:27:55,844 - INFO - Closing browsers in 7 seconds...
+2026-01-01 03:27:55,849 - INFO - Closing browsers in 7 seconds...
+2026-01-01 03:27:55,890 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:55,891 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:56,846 - INFO - Closing browsers in 6 seconds...
+2026-01-01 03:27:56,850 - INFO - Closing browsers in 6 seconds...
+2026-01-01 03:27:57,056 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:57,056 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:57,847 - INFO - Closing browsers in 5 seconds...
+2026-01-01 03:27:57,851 - INFO - Closing browsers in 5 seconds...
+2026-01-01 03:27:58,219 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:27:58,220 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:00,555 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:00,557 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:00,852 - INFO - Closing browsers in 2 seconds...
+2026-01-01 03:28:00,855 - INFO - Closing browsers in 2 seconds...
+2026-01-01 03:28:01,735 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:01,739 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:01,853 - INFO - Closing browsers in 1 seconds...
+2026-01-01 03:28:01,856 - INFO - Closing browsers in 1 seconds...
+2026-01-01 03:28:02,856 - DEBUG - Attempting to kill processes for image: brave.exe
+2026-01-01 03:28:02,859 - DEBUG - Attempting to kill processes for image: brave.exe
+2026-01-01 03:28:02,906 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:02,906 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:03,970 - INFO - Terminated 22 process(es) for brave.exe
+2026-01-01 03:28:03,971 - INFO - Terminated 22 process(es) for brave.exe
+2026-01-01 03:28:03,974 - INFO - Closed 22 browser process(es)
+2026-01-01 03:28:03,977 - INFO - Closed 22 browser process(es)
+2026-01-01 03:28:03,977 - INFO - Browsers closed - Extension disabled
+2026-01-01 03:28:00,555 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:00,557 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:00,852 - INFO - Closing browsers in 2 seconds...
+2026-01-01 03:28:00,855 - INFO - Closing browsers in 2 seconds...
+2026-01-01 03:28:01,735 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:01,739 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:01,853 - INFO - Closing browsers in 1 seconds...
+2026-01-01 03:28:01,856 - INFO - Closing browsers in 1 seconds...
+2026-01-01 03:28:02,856 - DEBUG - Attempting to kill processes for image: brave.exe
+2026-01-01 03:28:02,859 - DEBUG - Attempting to kill processes for image: brave.exe
+2026-01-01 03:28:02,906 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:02,906 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:03,970 - INFO - Terminated 22 process(es) for brave.exe
+2026-01-01 03:28:03,971 - INFO - Terminated 22 process(es) for brave.exe
+2026-01-01 03:28:03,974 - INFO - Closed 22 browser process(es)
+2026-01-01 03:28:03,977 - INFO - Closed 22 browser process(es)
+2026-01-01 03:28:03,977 - INFO - Browsers closed - Extension disabled
+2026-01-01 03:28:03,977 - INFO - Browsers closed - Extension disabled
+2026-01-01 03:28:03,978 - INFO - Shutdown sequence completed, monitoring will continue
+2026-01-01 03:28:03,978 - INFO - Shutdown sequence completed, monitoring will continue
+
+
+
+2026-01-01 03:28:00,855 - INFO - Closing browsers in 2 seconds...
+2026-01-01 03:28:01,735 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:01,739 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:01,853 - INFO - Closing browsers in 1 seconds...
+2026-01-01 03:28:01,856 - INFO - Closing browsers in 1 seconds...
+2026-01-01 03:28:02,856 - DEBUG - Attempting to kill processes for image: brave.exe
+2026-01-01 03:28:02,859 - DEBUG - Attempting to kill processes for image: brave.exe
+2026-01-01 03:28:02,906 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:02,906 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:03,970 - INFO - Terminated 22 process(es) for brave.exe
+2026-01-01 03:28:03,971 - INFO - Terminated 22 process(es) for brave.exe
+2026-01-01 03:28:03,974 - INFO - Closed 22 browser process(es)
+2026-01-01 03:28:03,977 - INFO - Closed 22 browser process(es)
+2026-01-01 03:28:03,977 - INFO - Browsers closed - Extension disabled
+2026-01-01 03:28:02,906 - DEBUG - [CHECK CYCLE] Starting extension check (shutdown_in_progress=True)
+2026-01-01 03:28:03,970 - INFO - Terminated 22 process(es) for brave.exe
+2026-01-01 03:28:03,971 - INFO - Terminated 22 process(es) for brave.exe
+2026-01-01 03:28:03,974 - INFO - Closed 22 browser process(es)
+2026-01-01 03:28:03,977 - INFO - Closed 22 browser process(es)
+2026-01-01 03:28:03,977 - INFO - Browsers closed - Extension disabled
+2026-01-01 03:28:03,977 - INFO - Browsers closed - Extension disabled
+2026-01-01 03:28:03,977 - INFO - Browsers closed - Extension disabled
+2026-01-01 03:28:03,978 - INFO - Shutdown sequence completed, monitoring will continue
+2026-01-01 03:28:03,978 - INFO - Shutdown sequence completed, monitoring will continue
+2026-01-01 03:28:03,978 - INFO - Shutdown sequence completed, monitoring will continue

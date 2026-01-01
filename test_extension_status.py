@@ -32,28 +32,18 @@ paths = {
 }
 
 def read_ext_data(pref_path, ext_id):
-    try:
-        if not os.path.exists(pref_path):
-            return None
-        with open(pref_path, 'r', encoding='utf-8') as f:
-            prefs = json.load(f)
-        return prefs.get('extensions', {}).get('settings', {}).get(ext_id)
-    except Exception:
-        return None
+    with open(pref_path, 'r', encoding='utf-8') as f:
+        prefs = json.load(f)
+    return prefs.get('extensions', {}).get('settings', {}).get(ext_id)
 
 enabled_count = 0
 mismatches = 0
 for browser_name in app.config['browsers']:
 
     status = app.check_extension_status(browser_name)
+    print('here is teh status', status)
     ext_data = read_ext_data(paths[browser_name], extension_id)
-    incog = None
-    try:
-        if ext_data is not None:
-            incog = extension_guardian_module._is_incognito_allowed(ext_data)
-    except Exception:
-        incog = None
-
+    incog = extension_guardian_module._is_incognito_allowed(ext_data)
     status_text = 'ENABLED' if status else 'DISABLED'
     incog_text = 'Unknown' if incog is None else ('Allowed' if incog else 'Not allowed')
     print(f"{browser_name}: {status_text} (Incognito: {incog_text})")

@@ -7,8 +7,6 @@ from tkinter import ttk, messagebox
 import psutil
 import time
 import threading
-import json
-import os
 import winreg
 from datetime import datetime
 from pathlib import Path
@@ -228,6 +226,10 @@ class ExtensionGuardian:
         self.shutdown_in_progress = False
         self.last_shutdown_time = None
         
+        self.recent_log_handler = None
+        self.last_snapshot_line = 0
+        self.snapshot_anchor_line = 0
+        
         self.setup_logging()
         self.setup_gui()
         self.load_config()
@@ -243,15 +245,20 @@ class ExtensionGuardian:
     def setup_logging(self):
         log_dir = Path.home() / "ExtensionGuardian" / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / f"guardian_{datetime.now().strftime('%Y%m%d')}.log"
+        self.log_dir = log_dir
+        self.current_log_path = log_file
         
         logging.basicConfig(
             level=logging.DEBUG,
             format='%(asctime)s - %(levelname)s - %(message)s',
             handlers=[
-                logging.FileHandler(log_dir / f"guardian_{datetime.now().strftime('%Y%m%d')}.log", encoding='utf-8'),
-                logging.StreamHandler()
+                logging.FileHandler(log_file, encoding='utf-8'),
+                logging.StreamHandler(),
             ]
         )
+        for handler in logging.getLogger().handlers:
+            handler.setLevel(logging.DEBUG)
         self.logger = logging.getLogger(__name__)
     
     def setup_gui(self):
@@ -288,7 +295,8 @@ class ExtensionGuardian:
                                            font=('Arial', 10), wraplength=700)
         self.check_result_label.pack(pady=5)
         
-        # Action button
+        # Action buttons
+        ttk.Button(main_frame, text="Save Log Snapshot Now", command=self.manual_save_log_snapshot).pack(pady=5)
         ttk.Button(main_frame, text="View Logs Folder", command=self.view_logs).pack(pady=5)
     
     def start_monitoring(self):
@@ -304,7 +312,6 @@ class ExtensionGuardian:
     def monitoring_loop(self):
         while self.is_monitoring:
             try:
-                self.logger.debug(f"[tick] scanning processes (interval=1s)")
                 self.check_browsers_and_extensions()
                 time.sleep(1)
             except Exception as e:
@@ -313,19 +320,20 @@ class ExtensionGuardian:
     
     def check_browsers_and_extensions(self):
         browsers_found = []
+        browsers_with_disabled_extension = []  # Track which browsers have disabled extension
         extension_disabled = False
         any_check_performed = False
         allowed_set = set(b.lower() for b in self.config['browsers'])
         
-        self.logger.debug(f"[CHECK CYCLE] Starting extension check (shutdown_in_progress={self.shutdown_in_progress})")
+        if self.shutdown_in_progress is True:        
+            self.logger.debug(f"[CHECK CYCLE] Starting extension check (shutdown_in_progress={self.shutdown_in_progress})")
         
-        self.logger.debug("Iterating running processes...")
         for proc in psutil.process_iter(['pid', 'name', 'exe']):
             try:
-                name_lower = (proc.info['name'] or '').lower()
+                name_lower = (proc.info.get('name') or '').lower()
                 if not name_lower:
                     continue
-                self.logger.debug(f"Process seen: name={proc.info['name']} pid={proc.info['pid']} exe={proc.info['exe']}")
+                # self.logger.debug(f"Process seen: name={proc.info['name']} pid={proc.info['pid']} exe={proc.info['exe']}")
                 if name_lower in allowed_set:
                     browsers_found.append({
                         'name': proc.info['name'],
@@ -337,9 +345,8 @@ class ExtensionGuardian:
                     any_check_performed = True
                     if not extension_enabled:
                         extension_disabled = True
+                        browsers_with_disabled_extension.append(proc.info['name'])
                         self.logger.warning(f"EXTENSION DISABLED in {proc.info['name']} (PID: {proc.info['pid']})")
-                    else:
-                        self.logger.info(f"Extension enabled in {proc.info['name']} (PID: {proc.info['pid']})")
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
         # Evaluate direct disabled indicators only as a fallback when no browser checks succeeded
@@ -351,56 +358,61 @@ class ExtensionGuardian:
                 self.logger.warning("DIRECT DISABLED INDICATORS FOUND (no browser checks) - treating as disabled")
 
         # Final decision: disabled if extension_disabled is True
-        self.logger.debug(f"[CHECK CYCLE] Complete - Browsers found: {len(browsers_found)}, "
-                         f"Checks performed: {any_check_performed}, "
-                         f"Extension disabled: {extension_disabled}")
+        if extension_disabled == True:
+            self.logger.debug(f"[CHECK CYCLE] Complete - Browsers found: {len(browsers_found)}, "
+                            f"Checks performed: {any_check_performed}, "
+                            f"Extension disabled: {extension_disabled}")
 
-        self.update_browser_status(browsers_found)
+        # self.update_browser_status(browsers_found)
         
         if extension_disabled and self.config['browser_close_enabled']:
+            if self.recent_log_handler:
+                self.snapshot_anchor_line = self.recent_log_handler.get_latest_line_index() + 1
             self.logger.warning("EXTENSION DISABLED DETECTED - TRIGGERING BROWSER SHUTDOWN")
             if self.last_shutdown_time:
                 elapsed = (datetime.now() - self.last_shutdown_time).total_seconds()
                 if elapsed < 60:
                     self.logger.debug(f"Recent shutdown {elapsed:.1f}s ago, skipping")
                 else:
+                    self.save_log_snapshot("shutdown")
                     self.shutdown_in_progress = True
                     self.logger.warning("Starting shutdown sequence for disabled extension")
-                    self.show_extension_disabled_warning()
-                    threading.Thread(target=self.countdown_and_close_browsers, daemon=True).start()
+                    self.show_extension_disabled_warning(browsers_with_disabled_extension)
+                    threading.Thread(target=lambda: self.countdown_and_close_browsers(browsers_with_disabled_extension), daemon=True).start()
             else:
+                self.save_log_snapshot("shutdown")
                 self.shutdown_in_progress = True
                 self.logger.warning("Starting shutdown sequence for disabled extension")
-                threading.Thread(target=self.countdown_and_close_browsers, daemon=True).start()
-        elif browsers_found and not extension_disabled:
-            self.logger.debug(f"[CHECK CYCLE] All extensions properly enabled in {len(browsers_found)} browser(s)")
-    
+                threading.Thread(target=lambda: self.countdown_and_close_browsers(browsers_with_disabled_extension), daemon=True).start()
+        
     def check_direct_disabled_indicators(self):
         return False
     
-    def show_extension_disabled_warning(self):
+    def show_extension_disabled_warning(self, affected_browsers):
         def show_warning():
+            browser_list = ', '.join(set(affected_browsers))
             warning_msg = f"""
-Your extension ({self.config['extension_id']}) has been disabled in one or more browsers.
+Your extension ({self.config['extension_id']}) has been disabled in: {browser_list}
 
-Action: All browser windows will close in {self.config['warning_countdown_seconds']} seconds to protect your browsing session.
+Action: Only the affected browser(s) will close in {self.config['warning_countdown_seconds']} seconds to protect your browsing session.
 """
             messagebox.showwarning("Extension Guardian - Extension Disabled", warning_msg)
         self.root.after(0, show_warning)
         
-    def countdown_and_close_browsers(self):
+    def countdown_and_close_browsers(self, affected_browsers):
         countdown = self.config['warning_countdown_seconds']
+        browser_list = ', '.join(set(affected_browsers))
         try:
             for i in range(countdown, 0, -1):
-                self.status_var.set(f"Closing browsers in {i} seconds...")
-                self.logger.info(f"Closing browsers in {i} seconds...")
+                self.status_var.set(f"Closing {browser_list} in {i} seconds...")
+                self.logger.info(f"Closing {browser_list} in {i} seconds...")
                 time.sleep(1)
             
-            self.close_all_browsers()
+            self.close_specific_browsers(affected_browsers)
             self.last_shutdown_time = datetime.now()
             
-            self.status_var.set("Browsers closed - Extension disabled")
-            self.logger.info("Browsers closed - Extension disabled")
+            self.status_var.set(f"Browsers closed - Extension disabled in {browser_list}")
+            self.logger.info(f"Browsers closed - Extension disabled in {browser_list}")
         finally:
             # Reset the flag so future detections can trigger shutdown
             self.shutdown_in_progress = False
@@ -419,6 +431,23 @@ Action: All browser windows will close in {self.config['warning_countdown_second
                 seen_images.add(name_lower)
 
         self.logger.info(f"Closed {closed_total} browser process(es)")
+    
+    def close_specific_browsers(self, browser_names):
+        """Close only the specific browsers that have the extension disabled."""
+        closed_total = 0
+        affected_set = set(b.lower() for b in browser_names)
+        seen_images = set()
+        
+        self.logger.info(f"Closing only affected browsers: {', '.join(browser_names)}")
+
+        for proc in psutil.process_iter(['pid', 'name']):
+            name_lower = (proc.info['name'] or '').lower()
+            if name_lower and name_lower in affected_set and name_lower not in seen_images:
+                killed = kill_processes_for_exe(proc.info['name'], logger=self.logger)
+                closed_total += killed
+                seen_images.add(name_lower)
+
+        self.logger.info(f"Closed {closed_total} process(es) for affected browsers only")
 
     def update_browser_status(self, browsers):
         for browser in browsers:
@@ -446,6 +475,44 @@ Action: All browser windows will close in {self.config['warning_countdown_second
     def view_logs(self):
         log_dir = Path.home() / "ExtensionGuardian" / "logs"
         os.startfile(str(log_dir))
+
+    def manual_save_log_snapshot(self):
+        snapshot_path = self.save_log_snapshot("manual")
+        if snapshot_path:
+            messagebox.showinfo("Logs Saved", f"Snapshot saved to:\n{snapshot_path}")
+        else:
+            messagebox.showwarning("Logs Not Saved", "No active log file to snapshot.")
+    
+    def save_log_snapshot(self, reason="manual"):
+        """Save recent log lines from memory buffer to a snapshot file."""
+        if not self.recent_log_handler:
+            self.logger.warning("No log buffer available for snapshot.")
+            return None
+        
+        snapshots_dir = self.log_dir / "snapshots"
+        snapshots_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        snapshot_path = snapshots_dir / f"log_snapshot_{reason}_{timestamp}.log"
+        
+        if reason == "shutdown":
+            log_lines = self.recent_log_handler.get_lines_since(self.snapshot_anchor_line)
+            if not log_lines:
+                self.logger.warning("No log lines found since anchor point for shutdown snapshot.")
+                return None
+        else:
+            log_lines = self.recent_log_handler.get_all_lines()
+            if not log_lines:
+                self.logger.warning("No log lines available in buffer for manual snapshot.")
+                return None
+        
+        try:
+            with open(snapshot_path, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(log_lines))
+            self.logger.info(f"Log snapshot saved: {snapshot_path} ({len(log_lines)} lines)")
+            return snapshot_path
+        except Exception as e:
+            self.logger.error(f"Failed to save log snapshot: {e}")
+            return None
      
     def load_config(self):
         config_file = Path.home() / "ExtensionGuardian" / "config.json"
@@ -537,6 +604,8 @@ Action: All browser windows will close in {self.config['warning_countdown_second
         """Return True if extension is enabled (incognito/private allowed) across profiles; False if disabled/blocked."""
         enabled_candidate = False
         found_any = False
+        profiles_checked = 0
+        profiles_skipped_due_to_errors = 0
 
         if not os.path.isdir(base_user_data_path):
             logger.warning(f"[SCAN FALSE] Base path missing: {base_user_data_path}")
@@ -553,10 +622,13 @@ Action: All browser windows will close in {self.config['warning_countdown_second
             if not os.path.isfile(prefs_path):
                 continue
 
+            profiles_checked += 1
+
             try:
                 with open(prefs_path, 'r', encoding='utf-8') as f:
                     prefs = json.load(f)
                 ext_data = prefs.get('extensions', {}).get('settings', {}).get(extension_id)
+                # print('here is prefs for',name, ext_data)
                 if not ext_data:
                     logger.debug(f"[SCAN] Extension {extension_id} not found in profile '{name}'")
                     continue
@@ -566,10 +638,11 @@ Action: All browser windows will close in {self.config['warning_countdown_second
                 incog_val = ext_data.get('incognito')
                 allow_incog = ext_data.get('allow_in_incognito')
                 disable_reasons = ext_data.get('disable_reasons', [])
-                logger.info(
-                    f"[SCAN] Profile '{name}': state={state_val}, incognito={incog_val}, "
-                    f"allow_in_incognito={allow_incog}, disable_reasons={disable_reasons}"
-                )
+                if disable_reasons:
+                    logger.info(
+                        f"[SCAN] Profile '{name}': state={state_val}, incognito={incog_val}, "
+                        f"allow_in_incognito={allow_incog}, disable_reasons={disable_reasons}"
+                    )
 
                 if state_val == 0:
                     logger.warning(f"[SCAN FALSE] Extension {extension_id} DISABLED (state=0) in profile '{name}'")
@@ -580,6 +653,7 @@ Action: All browser windows will close in {self.config['warning_countdown_second
                         f"[SCAN FALSE] Extension {extension_id} DISABLED (disable_reasons={disable_reasons}) "
                         f"in profile '{name}'"
                     )
+                    
                     return False
 
                 if not _is_incognito_allowed(ext_data):
@@ -590,11 +664,26 @@ Action: All browser windows will close in {self.config['warning_countdown_second
                     return False
 
                 enabled_candidate = True
+            except PermissionError as e:
+                profiles_skipped_due_to_errors += 1
+                logger.debug(f"[SCAN] Preferences locked by browser for profile '{name}' - skipping this check")
+                continue
             except Exception as e:
+                profiles_skipped_due_to_errors += 1
                 logger.debug(f"[SCAN] Error reading Preferences for profile '{name}': {e}")
                 continue
 
+        # RACE CONDITION FIX: If all profiles were skipped due to file locks/errors,
+        # assume extension is still enabled (don't trigger false positive shutdown)
+        if profiles_checked > 0 and profiles_skipped_due_to_errors == profiles_checked:
+            logger.debug(f"[SCAN SKIP] All {profiles_checked} profile(s) had file access errors - assuming extension is OK")
+            return True
+
         if not found_any:
+            # Only treat as "not found" if we actually checked profiles successfully
+            if profiles_skipped_due_to_errors > 0:
+                logger.debug(f"[SCAN SKIP] Extension not found but {profiles_skipped_due_to_errors} profile(s) had errors - assuming OK")
+                return True
             logger.warning(f"[SCAN FALSE] Extension {extension_id} not present in any profile under {base_user_data_path}")
             return False
 

@@ -1000,6 +1000,15 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
     }
   }
 
+  // Get movie keywords for content filtering
+  getMovieKeywords() {
+    return [
+      'movie', 'movies', 
+      'sflix', '123movies', 'putlocker', 'soap2day', 'gomovies', 'fmovies',
+      'fullmoviess', 'moviesto', 'watchmovies', 'freemovies',  
+    ];
+  }
+
   // NEW: Comprehensive movie content detection for URLs
   checkUrlForMovieContent(url, hostname) {
     const urlLower = (url || '').toLowerCase();
@@ -1045,6 +1054,23 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
       shouldBlock: false,
       reason: 'No movie content detected in URL'
     };
+  }
+
+  // Get vulgar keywords for content filtering
+  getVulgarKeywords() {
+    return [
+      'porn', 'xxx', 'nude', 'erotic',
+      'hentai', 'xvideos', 'pornhub', 'xhamster', 'redtube', 'youporn',
+      'tube8', 'xnxx', 'spankbang',
+      'chaturbate', 'stripchat', 'livejasmin', 'onlyfans', 'fansly',
+      'escort', 
+    ];
+  }
+
+  // Add method to log blocking keyword lists (called during init)
+  logBlockingKeywordLists() {
+    this.log('🚫 Vulgar content keywords loaded:', this.getVulgarKeywords().length + ' patterns');
+    this.log('🎬 Blocked entertainment sites:', this.blockedSites.length + ' domains');
   }
 
   // NEW: Comprehensive vulgar content detection for URLs
