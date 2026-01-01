@@ -225,6 +225,8 @@ class ExtensionGuardian:
         self.monitoring_thread = None
         self.shutdown_in_progress = False
         self.last_shutdown_time = None
+        self.consecutive_disabled_counts = {}  # Track consecutive "disabled" detections per browser
+        self.CONSECUTIVE_CHECKS_REQUIRED = 3  # Require 3 consecutive checks before shutdown
         
         self.recent_log_handler = None
         self.last_snapshot_line = 0
@@ -343,10 +345,24 @@ class ExtensionGuardian:
                     
                     extension_enabled = self.check_extension_status(proc.info['name'])
                     any_check_performed = True
+                    browser_key = proc.info['name'].lower()
+                    
                     if not extension_enabled:
-                        extension_disabled = True
-                        browsers_with_disabled_extension.append(proc.info['name'])
-                        self.logger.warning(f"EXTENSION DISABLED in {proc.info['name']} (PID: {proc.info['pid']})")
+                        # Increment consecutive disabled count
+                        self.consecutive_disabled_counts[browser_key] = self.consecutive_disabled_counts.get(browser_key, 0) + 1
+                        count = self.consecutive_disabled_counts[browser_key]
+                        
+                        if count >= self.CONSECUTIVE_CHECKS_REQUIRED:
+                            extension_disabled = True
+                            browsers_with_disabled_extension.append(proc.info['name'])
+                            self.logger.warning(f"EXTENSION DISABLED in {proc.info['name']} (PID: {proc.info['pid']}) - confirmed after {count} consecutive checks")
+                        else:
+                            self.logger.debug(f"[CONSECUTIVE] {proc.info['name']} disabled check {count}/{self.CONSECUTIVE_CHECKS_REQUIRED} - waiting for confirmation")
+                    else:
+                        # Reset counter when extension is found enabled
+                        if browser_key in self.consecutive_disabled_counts and self.consecutive_disabled_counts[browser_key] > 0:
+                            self.logger.debug(f"[CONSECUTIVE] {proc.info['name']} now enabled - resetting counter (was {self.consecutive_disabled_counts[browser_key]})")
+                        self.consecutive_disabled_counts[browser_key] = 0
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
         # Evaluate direct disabled indicators only as a fallback when no browser checks succeeded
