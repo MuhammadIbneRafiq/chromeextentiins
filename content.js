@@ -3,17 +3,20 @@ console.log('[AI Guardian] Content script loaded on:', location.href);
 console.log('[AI Guardian] Hostname:', location.hostname);
 console.log('[AI Guardian] User Agent:', navigator.userAgent);
 
-// IMMEDIATE YouTube blocking on Perplexity/Comet (runs before class init)
+// IMMEDIATE YouTube blocking on Perplexity/Comet/Gemini (runs before class init)
 (function() {
   const isPerplexity = /perplexity\.ai/.test(location.hostname) || 
                        location.hostname.includes('perplexity') ||
                        /comet/i.test(navigator.userAgent) ||
                        /perplexity/i.test(navigator.userAgent);
   
-  console.log('[AI Guardian] Perplexity/Comet detection (immediate):', isPerplexity);
+  const isGemini = /gemini\.google\.com/.test(location.hostname);
   
-  if (isPerplexity) {
-    console.log('[AI Guardian] ✅ PERPLEXITY/COMET DETECTED - Starting immediate YouTube blocking');
+  console.log('[AI Guardian] Perplexity/Comet detection (immediate):', isPerplexity);
+  console.log('[AI Guardian] Gemini detection (immediate):', isGemini);
+  
+  if (isPerplexity || isGemini) {
+    console.log(`[AI Guardian] ${isGemini ? 'GEMINI' : 'PERPLEXITY/COMET'} DETECTED - Starting immediate YouTube blocking`);
     
     const blockYouTube = () => {
       let count = 0;
@@ -35,7 +38,7 @@ console.log('[AI Guardian] User Agent:', navigator.userAgent);
           count++;
         }
       });
-      if (count > 0) console.log(`[AI Guardian] 🚫 Blocked ${count} YouTube elements (immediate pass)`);
+      if (count > 0) console.log(`[AI Guardian] Blocked ${count} YouTube elements (immediate pass)`);
     };
     
     // Multiple passes

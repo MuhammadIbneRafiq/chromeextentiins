@@ -564,12 +564,26 @@ Action: Only the affected browser(s) will close in {self.config['warning_countdo
             else:
                 exe_path = f"{sys.executable} \"{Path(__file__).resolve()}\""
 
-        command = f'"{exe_path}"'
+        command = f'"{exe_path}" --background'
 
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_key_path, 0, winreg.KEY_SET_VALUE) as key:
-            winreg.SetValueEx(key, value_name, 0, winreg.REG_SZ, command)
-        self.logger.info("Startup registration ensured (HKCU Run)")
-    
+        if hasattr(winreg, "KEY_WOW64_64KEY"):
+            target_views = [winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY]
+        else:
+            target_views = [0]
+
+        for view in target_views:
+            access = winreg.KEY_SET_VALUE | view
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_key_path, 0, access) as key:
+                    winreg.SetValueEx(key, value_name, 0, winreg.REG_SZ, command)
+                self.logger.info(f"Startup registration ensured (HKCU Run, view={view or 'default'})")
+            except FileNotFoundError:
+                with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, run_key_path, 0, access) as key:
+                    winreg.SetValueEx(key, value_name, 0, winreg.REG_SZ, command)
+                self.logger.info(f"Startup registration created (HKCU Run, view={view or 'default'})")
+            except OSError as e:
+                self.logger.error(f"Failed to write Run entry (view={view or 'default'}): {e}")
+            
     def on_closing(self):
         self.root.withdraw()
         if not hasattr(self, 'icon'):
@@ -598,23 +612,51 @@ Action: Only the affected browser(s) will close in {self.config['warning_countdo
         while self.is_monitoring:
             self.check_browsers_and_extensions()
             time.sleep(1)
+
     def check_extension_status(self, browser_name):
         browser_name_lower = browser_name.lower()
         extension_id = self.config['extension_id']
-        
+
+        # Support multiple channels (stable/beta/dev/canary) and any profile folder that has a Preferences file
+        def _candidate_paths(paths):
+            return [os.path.expandvars(p) for p in paths]
+
+        base_paths = []
         if 'chrome.exe' in browser_name_lower:
-            base_path = os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data")
+            base_paths = _candidate_paths([
+                r"%LOCALAPPDATA%\Google\Chrome\User Data",
+                r"%LOCALAPPDATA%\Google\Chrome Beta\User Data",
+                r"%LOCALAPPDATA%\Google\Chrome SxS\User Data",
+            ])
         elif 'msedge.exe' in browser_name_lower:
-            base_path = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\User Data")
+            base_paths = _candidate_paths([
+                r"%LOCALAPPDATA%\Microsoft\Edge\User Data",
+                r"%LOCALAPPDATA%\Microsoft\Edge Beta\User Data",
+                r"%LOCALAPPDATA%\Microsoft\Edge Dev\User Data",
+                r"%LOCALAPPDATA%\Microsoft\Edge SxS\User Data",
+            ])
         elif 'brave.exe' in browser_name_lower:
-            base_path = os.path.expandvars(r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data")
+            base_paths = _candidate_paths([
+                r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data",
+                r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser-Beta\User Data",
+                r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser-Dev\User Data",
+            ])
         elif 'comet.exe' in browser_name_lower:
-            base_path = os.path.expandvars(r"%LOCALAPPDATA%\Perplexity\Comet\User Data")
+            base_paths = _candidate_paths([
+                r"%LOCALAPPDATA%\Perplexity\Comet\User Data",
+            ])
         else:
             self.logger.warning(f"Unknown browser: {browser_name}")
             return False
-        
-        return self._scan_profiles_for_ext_status(base_path, extension_id, self.logger)
+
+        for base_path in base_paths:
+            status = self._scan_profiles_for_ext_status(base_path, extension_id, self.logger)
+            if status is True:
+                return True
+            # If explicitly False (found disabled), stop early.
+            if status is False:
+                return False
+        return False
     
     def _scan_profiles_for_ext_status(self, base_user_data_path, extension_id, logger):
         """Return True if extension is enabled (incognito/private allowed) across profiles; False if disabled/blocked."""
@@ -624,14 +666,77 @@ Action: Only the affected browser(s) will close in {self.config['warning_countdo
         profiles_skipped_due_to_errors = 0
 
         if not os.path.isdir(base_user_data_path):
-            logger.warning(f"[SCAN FALSE] Base path missing: {base_user_data_path}")
-            return False
+            logger.debug(f"[SCAN] Base path missing: {base_user_data_path}")
+            return None
 
         for name in os.listdir(base_user_data_path):
+            # Handle snapshot-based profiles (Edge/Brave keep snapshots under User Data/Snapshots/<ver>/<profile>)
+            if name.lower() == 'snapshots':
+                snapshots_root = os.path.join(base_user_data_path, name)
+                for ver in os.listdir(snapshots_root):
+                    ver_dir = os.path.join(snapshots_root, ver)
+                    if not os.path.isdir(ver_dir):
+                        continue
+                    for prof in os.listdir(ver_dir):
+                        profile_dir = os.path.join(ver_dir, prof)
+                        if not os.path.isdir(profile_dir):
+                            continue
+                        prefs_path = os.path.join(profile_dir, 'Preferences')
+                        if not os.path.isfile(prefs_path):
+                            continue
+
+                        profiles_checked += 1
+                        try:
+                            with open(prefs_path, 'r', encoding='utf-8') as f:
+                                prefs_json = json.load(f)
+                            ext_data = prefs_json.get('extensions', {}).get('settings', {}).get(extension_id)
+                            if not ext_data:
+                                logger.debug(f"[SCAN] Extension {extension_id} not found in snapshot profile '{prof}'")
+                                continue
+
+                            found_any = True
+                            state_val = ext_data.get('state')
+                            incog_val = ext_data.get('incognito')
+                            allow_incog = ext_data.get('allow_in_incognito')
+                            disable_reasons = ext_data.get('disable_reasons', [])
+                            if disable_reasons:
+                                logger.info(
+                                    f"[SCAN] Snapshot profile '{prof}': state={state_val}, incognito={incog_val}, "
+                                    f"allow_in_incognito={allow_incog}, disable_reasons={disable_reasons}"
+                                )
+
+                            if state_val == 0:
+                                logger.warning(f"[SCAN FALSE] Extension {extension_id} DISABLED (state=0) in snapshot '{prof}'")
+                                return False
+
+                            if disable_reasons:
+                                logger.warning(
+                                    f"[SCAN FALSE] Extension {extension_id} DISABLED (disable_reasons={disable_reasons}) "
+                                    f"in snapshot '{prof}'"
+                                )
+                                return False
+
+                            if not _is_incognito_allowed(ext_data):
+                                logger.warning(
+                                    f"[SCAN FALSE] Extension {extension_id} not allowed in private/incognito in snapshot '{prof}' "
+                                    f"(incognito={incog_val}, allow_in_incognito={allow_incog})"
+                                )
+                                return False
+
+                            enabled_candidate = True
+                        except PermissionError:
+                            profiles_skipped_due_to_errors += 1
+                            logger.debug(f"[SCAN] Preferences locked by browser for snapshot '{prof}' - skipping this check")
+                            continue
+                        except Exception as e:
+                            profiles_skipped_due_to_errors += 1
+                            logger.debug(f"[SCAN] Error reading Preferences for snapshot '{prof}': {e}")
+                            continue
+                # done with snapshots; move to next top-level entry
+                continue
+
             profile_dir = os.path.join(base_user_data_path, name)
             if not os.path.isdir(profile_dir):
-                continue
-            if name != 'Default' and not name.startswith('Profile'):
                 continue
 
             prefs_path = os.path.join(profile_dir, 'Preferences')
@@ -644,7 +749,6 @@ Action: Only the affected browser(s) will close in {self.config['warning_countdo
                 with open(prefs_path, 'r', encoding='utf-8') as f:
                     prefs = json.load(f)
                 ext_data = prefs.get('extensions', {}).get('settings', {}).get(extension_id)
-                # print('here is prefs for',name, ext_data)
                 if not ext_data:
                     logger.debug(f"[SCAN] Extension {extension_id} not found in profile '{name}'")
                     continue
@@ -669,7 +773,6 @@ Action: Only the affected browser(s) will close in {self.config['warning_countdo
                         f"[SCAN FALSE] Extension {extension_id} DISABLED (disable_reasons={disable_reasons}) "
                         f"in profile '{name}'"
                     )
-                    
                     return False
 
                 if not _is_incognito_allowed(ext_data):
@@ -680,7 +783,7 @@ Action: Only the affected browser(s) will close in {self.config['warning_countdo
                     return False
 
                 enabled_candidate = True
-            except PermissionError as e:
+            except PermissionError:
                 profiles_skipped_due_to_errors += 1
                 logger.debug(f"[SCAN] Preferences locked by browser for profile '{name}' - skipping this check")
                 continue
@@ -699,9 +802,9 @@ Action: Only the affected browser(s) will close in {self.config['warning_countdo
             # Only treat as "not found" if we actually checked profiles successfully
             if profiles_skipped_due_to_errors > 0:
                 logger.debug(f"[SCAN SKIP] Extension not found but {profiles_skipped_due_to_errors} profile(s) had errors - assuming OK")
-                return True
+                return None
             logger.warning(f"[SCAN FALSE] Extension {extension_id} not present in any profile under {base_user_data_path}")
-            return False
+            return None
 
         return enabled_candidate
     

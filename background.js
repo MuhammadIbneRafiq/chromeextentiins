@@ -11,6 +11,7 @@ class ProductivityGuardian {
       'streamingmovies', 'moviehub', 'filmhub', 'cinemahub', 'movie4k', 'moviehd',
       'hulu.com', 'disneyplus.com', 'hbomax.com', 'peacock.com', 'paramountplus.com',
       'appletv.com', 'crunchyroll.com', 'funimation.com', 'vudu.com',
+      'linkedin.com',
       // Adult/vulgar sites
       'pornhub.com', 'xhamster.com', 'xvideos.com', 'redtube.com', 'youporn.com', 'tube8.com',
       'adultfriendfinder.com', 'ashleymadison.com', 'adultdating.com', 'hookup.com',
@@ -184,20 +185,8 @@ class ProductivityGuardian {
 
   // Helper method to check if current Amsterdam time is in bypass window (3:30 AM - 6:00 AM)
   async isInTimeBypassWindow() {
-    const time = await this.getAmsterdamTime();
-    const hour = time.hour;
-    const minute = time.minute;
-    
-    // Convert to minutes since midnight for easier comparison
-    const currentMinutes = hour * 60 + minute;
-    const startMinutes = 3 * 60 + 30; // 3:30 AM = 210 minutes
-    const endMinutes = 6 * 60; // 6:00 AM = 360 minutes
-    
-    const inWindow = currentMinutes >= startMinutes && currentMinutes < endMinutes;
-    
-    this.log(`⏱️ Time check (Amsterdam): ${hour}:${String(minute).padStart(2, '0')} -> ${inWindow ? 'BYPASS WINDOW' : 'RESTRICT'}`);
-    
-    return inWindow;
+    // Removed time-based bypass window
+    return false;
   }
 
   async evaluateJustification(text) {
@@ -350,28 +339,6 @@ class ProductivityGuardian {
     // Handle messages from content script
     chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       try {
-        // Check if current Amsterdam time is between 3:30 AM and 6:00 AM
-        const inBypassWindow = await this.isInTimeBypassWindow();
-        
-        // During bypass window, check for vulgar content but allow everything else
-        if (inBypassWindow) {
-          // Still check for vulgar content even during bypass window
-          if (sender?.tab?.url) {
-            const url = sender.tab.url;
-            const hostname = new URL(url).hostname;
-            const vulgarCheck = this.checkUrlForVulgarContent(url, hostname);
-            if (vulgarCheck.shouldBlock) {
-              this.log('🚫 VULGAR CONTENT BLOCKED during bypass window:', vulgarCheck);
-              sendResponse({ shouldBlock: true, reason: vulgarCheck.reason });
-              return true;
-            }
-          }
-          
-          this.log('🕒 Time-based bypass: Current time is 3:30 AM - 6:00 AM - allowing all non-vulgar content');
-          sendResponse({ shouldBlock: false, reason: 'Time-based bypass (3:30 AM - 6:00 AM)', bypassExtension: true });
-          return true;
-        }
-        
         // COMPLETELY BYPASS Yuja platform - no extension functionality at all
         if (sender?.tab?.url && sender.tab.url.includes('tue.video.yuja.com')) {
           this.log('🎥 Yuja platform detected in message - completely bypassing extension functionality');
@@ -731,23 +698,6 @@ Respond in JSON format:
       this.log('🔍 AI Productivity Guardian - Analyzing URL');
       this.log('📍 URL:', url);
       
-      // Check if current Amsterdam time is between 3:30 AM and 6:00 AM
-      const inBypassWindow = await this.isInTimeBypassWindow();
-      
-      if (inBypassWindow) {
-        // Still check for vulgar content even during bypass window
-        const hostname = new URL(url).hostname;
-        const vulgarCheck = this.checkUrlForVulgarContent(url, hostname);
-        if (vulgarCheck.shouldBlock) {
-          this.log('🚫 VULGAR CONTENT BLOCKED during bypass window:', vulgarCheck);
-          await this.blockTab(tabId, hostname, vulgarCheck.reason);
-          return;
-        }
-        
-        this.log('🕒 Time-based bypass: Current time is 3:30 AM - 6:00 AM - allowing all non-vulgar sites');
-        return;
-      }
-      
       // COMPLETELY BYPASS Yuja platform - no extension functionality at all
       if (url.includes('tue.video.yuja.com')) {
         this.log('🎥 Yuja platform detected - completely bypassing extension functionality');
@@ -790,68 +740,6 @@ Respond in JSON format:
 
       const hostname = new URL(url).hostname;
       this.log('🏠 Hostname:', hostname);
-
-      // Night relax window for Amsterdam: 03:00–06:00 — allow everything except vulgar
-      try {
-        const amsHour = await this.getAmsterdamHour();
-        if (typeof amsHour === 'number' && amsHour >= 3 && amsHour < 6) {
-          const vulgarCheck = this.checkUrlForVulgarContent(url, hostname);
-          if (vulgarCheck.shouldBlock) {
-            this.log('🚫 BLOCKING (night vulgar):', vulgarCheck);
-            await this.blockTab(tabId, hostname, 'Vulgar content (03–06 Amsterdam)');
-            return;
-          }
-          this.log('🌙 03–06 Amsterdam: relaxing rules – allowing non‑vulgar content');
-          return;
-        }
-      } catch (e) {
-        this.log('⚠️ Amsterdam time check failed; proceeding with normal rules', String(e));
-      }
-
-      // Check if explicitly allowed
-      if (this.allowedSites.some(site => hostname.includes(site))) {
-        this.log('✅ ALLOWED: Site is in whitelist');
-        return;
-      }
-
-      // Active focus session enforcement (domain whitelist)
-      if (this.isSessionActive?.()) {
-        this.log('🎯 Focus Session Active - Checking domain whitelist');
-        const allowed = (this.currentSession.allowedDomains || []);
-        const inAllowedDomain = allowed.some(d => hostname.endsWith(d) || hostname.includes(d));
-        
-        this.log('📋 Allowed Domains:', allowed);
-        this.log('🔍 Domain Match:', inAllowedDomain ? '✅ ALLOWED' : '❌ NOT ALLOWED');
-        
-        if (!inAllowedDomain) {
-          // Allow a small number of extra domains if configured (e.g., cdn, auth)
-          const res = await chrome.storage.local.get(['sessionExtras']);
-          const extras = res.sessionExtras || {};
-          const curId = this.currentSession.id;
-          const setForId = extras[curId] || new Set();
-          const setArr = Array.isArray(setForId) ? setForId : []; // storage serializes sets
-          
-          this.log('🔢 Extra Domains Used:', setArr.length);
-          this.log('🔢 Max Extra Domains Allowed:', this.currentSession.maxExtraDomains || 0);
-          
-          if (setArr.includes(hostname) || (this.currentSession.maxExtraDomains||0) > setArr.length) {
-            if (!setArr.includes(hostname)) {
-              setArr.push(hostname);
-              extras[curId] = setArr;
-              await chrome.storage.local.set({ sessionExtras: extras });
-              this.log('✅ ALLOWED: Extra domain added to session');
-            } else {
-              this.log('✅ ALLOWED: Extra domain already in session');
-            }
-          } else {
-            this.log('🚫 BLOCKING: Domain not allowed in focus session');
-            await this.blockTab(tabId, hostname, 'Focus Session: domain not in allowed list');
-            return;
-          }
-        } else {
-          this.log('✅ ALLOWED: Domain matches focus session whitelist');
-        }
-      }
 
       // Check temporary bypass window
       const bypassOk = await this.isBypassActive(hostname);
@@ -923,18 +811,11 @@ Respond in JSON format:
 
   async analyzeUrlWithAI(url, hostname) {
     try {
-      // ALWAYS check for vulgar content first (even during bypass window)
+      // ALWAYS check for vulgar content first
       const vulgarBlockResult = this.checkUrlForVulgarContent(url, hostname);
       if (vulgarBlockResult.shouldBlock) {
         this.log('🚫 VULGAR CONTENT DETECTED IN URL - BLOCKING IMMEDIATELY:', vulgarBlockResult);
         return true; // Block the site
-      }
-      
-      // Check if current Amsterdam time is between 3:30 AM and 6:00 AM
-      const inBypassWindow = await this.isInTimeBypassWindow();
-      if (inBypassWindow) {
-        this.log('🕒 Time-based bypass: Current time is 3:30 AM - 6:00 AM - allowing non-vulgar site');
-        return false; // Allow the site
       }
       
       // NEW: Aggressive movie content detection before AI analysis
@@ -1067,11 +948,16 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
     ];
   }
 
-  // Add method to log blocking keyword lists (called during init)
   logBlockingKeywordLists() {
-    this.log('🚫 Vulgar content keywords loaded:', this.getVulgarKeywords().length + ' patterns');
-    this.log('🎬 Blocked entertainment sites:', this.blockedSites.length + ' domains');
+    try {
+      this.log(' Vulgar keyword patterns loaded:', this.getVulgarKeywords().length);
+      this.log(' Movie keyword patterns loaded:', this.getMovieKeywords().length);
+      this.log(' Explicitly blocked domains:', this.blockedSites.length);
+    } catch (error) {
+      console.error('Error logging keyword lists:', error);
+    }
   }
+
 
   // NEW: Comprehensive vulgar content detection for URLs
   checkUrlForVulgarContent(url, hostname) {
@@ -1121,13 +1007,6 @@ Be strict - when in doubt, lean towards BLOCK for productivity.`;
   }
 
   async analyzeContentWithAI(contentData) {
-    // Check if current Amsterdam time is between 3:30 AM and 6:00 AM
-    const inBypassWindow = await this.isInTimeBypassWindow();
-    if (inBypassWindow) {
-      this.log('🕒 Time-based bypass: Current time is 3:30 AM - 6:00 AM - allowing all non-vulgar content');
-      return { shouldBlock: false, reason: 'Time-based bypass (3:30 AM - 6:00 AM)' };
-    }
-    
     if (!this.groqApiKey) return { shouldBlock: false, reason: 'No API key' };
     if (!this.apiWorking) return { shouldBlock: false, reason: 'API not working' };
     
