@@ -24,17 +24,63 @@ app.logger.setLevel(logging.INFO)
 app.logger.addHandler(logging.StreamHandler())
 
 enabled_count = 0
-paths = {
-    'chrome.exe': os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data\Default\Preferences"),
-    'brave.exe': os.path.expandvars(r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default\Preferences"),
-    'comet.exe': os.path.expandvars(r"%LOCALAPPDATA%\Perplexity\Comet\User Data\Default\Preferences"),
-    'msedge.exe': os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Preferences"),
+base_paths = {
+    'chrome.exe': [
+        r"%LOCALAPPDATA%\Google\Chrome\User Data",
+        r"%LOCALAPPDATA%\Google\Chrome Beta\User Data",
+        r"%LOCALAPPDATA%\Google\Chrome SxS\User Data",
+    ],
+    'msedge.exe': [
+        r"%LOCALAPPDATA%\Microsoft\Edge\User Data",
+        r"%LOCALAPPDATA%\Microsoft\Edge Beta\User Data",
+        r"%LOCALAPPDATA%\Microsoft\Edge Dev\User Data",
+        r"%LOCALAPPDATA%\Microsoft\Edge SxS\User Data",
+    ],
+    'brave.exe': [
+        r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data",
+        r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser-Beta\User Data",
+        r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser-Dev\User Data",
+    ],
+    'comet.exe': [
+        r"%LOCALAPPDATA%\Perplexity\Comet\User Data",
+    ],
 }
 
-def read_ext_data(pref_path, ext_id):
-    with open(pref_path, 'r', encoding='utf-8') as f:
-        prefs = json.load(f)
-    return prefs.get('extensions', {}).get('settings', {}).get(ext_id)
+def iter_prefs_paths(base_path):
+    if not os.path.isdir(base_path):
+        return
+    for name in os.listdir(base_path):
+        if name.lower() == 'snapshots':
+            snapshots_root = os.path.join(base_path, name)
+            for ver in os.listdir(snapshots_root):
+                ver_dir = os.path.join(snapshots_root, ver)
+                if not os.path.isdir(ver_dir):
+                    continue
+                for prof in os.listdir(ver_dir):
+                    profile_dir = os.path.join(ver_dir, prof)
+                    prefs = os.path.join(profile_dir, 'Preferences')
+                    if os.path.isfile(prefs):
+                        yield prefs
+            continue
+        profile_dir = os.path.join(base_path, name)
+        prefs = os.path.join(profile_dir, 'Preferences')
+        if os.path.isfile(prefs):
+            yield prefs
+
+def read_ext_data_from_bases(browser_name, ext_id):
+    paths = base_paths.get(browser_name, [])
+    for raw_base in paths:
+        base = os.path.expandvars(raw_base)
+        for prefs_path in iter_prefs_paths(base):
+            try:
+                with open(prefs_path, 'r', encoding='utf-8') as f:
+                    prefs = json.load(f)
+                ext_data = prefs.get('extensions', {}).get('settings', {}).get(ext_id)
+                if ext_data:
+                    return ext_data
+            except Exception:
+                continue
+    return None
 
 enabled_count = 0
 mismatches = 0
@@ -42,7 +88,8 @@ for browser_name in app.config['browsers']:
 
     status = app.check_extension_status(browser_name)
     print('here is teh status', status)
-    ext_data = read_ext_data(paths[browser_name], extension_id)
+    ext_data = read_ext_data_from_bases(browser_name, extension_id)
+
     incog = extension_guardian_module._is_incognito_allowed(ext_data)
     status_text = 'ENABLED' if status else 'DISABLED'
     incog_text = 'Unknown' if incog is None else ('Allowed' if incog else 'Not allowed')
