@@ -176,12 +176,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Chrome Extension API** - For powerful browser automation
 - **Open Source Community** - For inspiration and tools
 
-## 📞 Support
-
-- **Documentation**: See our [Wiki](https://github.com/yourusername/extension-guardian/wiki)
-- **Issues**: Report bugs via [GitHub Issues](https://github.com/yourusername/extension-guardian/issues)
-- **Discussions**: Join our [Community Discussions](https://github.com/yourusername/extension-guardian/discussions)
-
 ## 🔮 Roadmap
 
 - [ ] Mobile app companion
