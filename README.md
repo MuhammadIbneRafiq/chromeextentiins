@@ -1,6 +1,6 @@
-# AI Productivity Guardian
+# AI Productivity Guardian - or as the name suggests 'chromeextentiins'
 
-A Chrome extension designed to enhance focus and productivity through intelligent content filtering and analytics.
+besides being an open source attempt that began with a typo primarily because when i was building it to fight my procrastination habit, i was procrastinating to spell it correctly...but u guessed it, its a Chrome extension designed to enhance focus and productivity through intelligent content filtering and analytics-and whatever chat suggested a banger of a line < insert them here >
 
 ## Overview
 
