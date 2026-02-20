@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Productivity Guardian</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">🤖</div>
+            <h1>AI Productivity Guardian</h1>
+            <div class="status" id="status">
+                <span class="indicator" id="statusIndicator"></span>
+                <span id="statusText">Loading...</span>
+            </div>
+        </header>
+
+        <div class="toggle-section">
+            <label class="toggle">
+                <input type="checkbox" id="enabledToggle">
+                <span class="slider"></span>
+            </label>
+            <span>Enable Protection</span>
+        </div>
+        
+        <div class="section">
+            <h3>🧠 Advanced AI Analysis</h3>
+            <div class="toggle-group">
+                <label for="advancedAnalysisToggle">Enable Advanced Analysis:</label>
+                <input type="checkbox" id="advancedAnalysisToggle">
+                <span class="toggle-label" id="advancedAnalysisStatus">OFF</span>
+            </div>
+            <p class="help-text">Enhanced AI with similarity matching, named entity recognition, and contextual understanding</p>
+            
+            <div class="advanced-features" id="advancedFeatures" style="display: none;">
+                <div class="feature-item">
+                    <h4>🔍 Similarity Matching</h4>
+                    <p>Calculates semantic similarity between content and your study topics</p>
+                </div>
+                <div class="feature-item">
+                    <h4>👥 Named Entity Recognition</h4>
+                    <p>Identifies people, organizations, concepts, and locations in content</p>
+                </div>
+                <div class="feature-item">
+                    <h4>📊 Contextual Analysis</h4>
+                    <p>Considers time of day, browsing patterns, and user preferences</p>
+                </div>
+                <div class="feature-item">
+                    <h4>🎯 Intent Classification</h4>
+                    <p>Determines if content is educational, entertainment, or work-related</p>
+                </div>
+            </div>
+            
+            <div class="quick-actions">
+                <button id="saveAdvancedSettings" class="btn-primary">Save Advanced Settings</button>
+                <button id="testAdvancedAnalysis" class="btn-secondary">Test Analysis</button>
+            </div>
+        </div>
+        
+        <!-- Focus Analytics Section -->
+        <div class="section">
+            <h3>📊 Focus Analytics</h3>
+            <div class="analytics-status" id="analyticsStatus">
+                <div class="status-indicator" id="analyticsIndicator">
+                    <span class="status-dot" id="analyticsDot"></span>
+                    <span class="status-text" id="analyticsStatusText">Not Tracking</span>
+                </div>
+            </div>
+            
+            <div class="analytics-controls">
+                <button id="startAnalytics" class="btn-primary">Start Focus Session</button>
+                <button id="stopAnalytics" class="btn-secondary" disabled>Stop Session</button>
+                <button id="viewReport" class="btn-secondary">View Latest Report</button>
+            </div>
+            
+            <div class="analytics-summary" id="analyticsSummary" style="display: none;">
+                <h4>Current Session</h4>
+                <div class="session-metrics">
+                    <div class="metric">
+                        <span class="metric-label">Session Time:</span>
+                        <span class="metric-value" id="sessionTime">0:00</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Productivity:</span>
+                        <span class="metric-value" id="productivityScore">0%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Tab Switches:</span>
+                        <span class="metric-value" id="tabSwitches">0</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Distractions:</span>
+                        <span class="metric-value" id="distractionCount">0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="analytics-features" id="analyticsFeatures" style="display: none;">
+                <div class="feature-item">
+                    <h4>⏱️ Time Tracking</h4>
+                    <p>Tracks time spent on each tab and overall session duration</p>
+                </div>
+                <div class="feature-item">
+                    <h4>🖱️ Cursor Activity</h4>
+                    <p>Monitors mouse movement, clicks, and typing patterns</p>
+                </div>
+                <div class="feature-item">
+                    <h4>📈 Productivity Score</h4>
+                    <p>Calculates focus efficiency based on active vs inactive time</p>
+                </div>
+                <div class="feature-item">
+                    <h4>🔄 Tab Switching</h4>
+                    <p>Analyzes tab switching patterns and distraction frequency</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>🔒 Focus Lock</h3>
+            <div class="toggle-section" style="padding:0; background:transparent; border:none;">
+                <label class="toggle">
+                    <input type="checkbox" id="focusLockToggle">
+                    <span class="slider"></span>
+                </label>
+                <span>Lock Focus & Protection (prevents turning off during sessions)</span>
+            </div>
+            <div class="input-group" id="focusLockTimerGroup" style="display: none;">
+                <label for="focusLockHours">Lock Duration:</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="number" id="focusLockHours" min="0" max="168" value="0" placeholder="Hours (0-168)" style="width: 80px;">
+                    <span>hours</span>
+                    <input type="number" id="focusLockMinutes" min="1" max="59" value="30" placeholder="Minutes (1-59)" style="width: 80px;">
+                    <span>minutes</span>
+                </div>
+                <small>Lock will automatically expire after this time</small>
+                <button id="activateFocusLock" class="btn-primary" style="margin-top: 10px;">🔒 Activate Focus Lock</button>
+                <div id="focusLockTimerDisplay" style="margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; display: none;">
+                    <strong>⏰ Time Remaining: <span id="focusLockTimeRemaining">--</span></strong>
+                </div>
+            </div>
+            <p class="help-text">When locked, toggles are disabled and changes are ignored until timer expires.</p>
+            
+            <!-- Lock Status Indicator -->
+            <div id="lockStatusIndicator" style="display: none; margin-top: 10px; padding: 10px; background: rgba(220, 38, 38, 0.1); border: 2px solid #dc2626; border-radius: 5px; text-align: center; color: #dc2626; font-weight: bold;">
+                <span>🔒 FOCUS LOCK ACTIVE</span>
+                <div id="lockStatusMessage" style="font-size: 12px; margin-top: 5px; opacity: 0.8;">
+                    Cannot be manually disabled until timer expires
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>📊 Today's Statistics</h3>
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-number" id="blockedCount">0</span>
+                    <span class="stat-label">Sites Blocked</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="timesSaved">0</span>
+                    <span class="stat-label">Minutes Saved</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🎯 Focus Session</h3>
+            <div class="toggle-section" style="padding:0; background:transparent; border:none;">
+                <label class="toggle">
+                    <input type="checkbox" id="focusToggle">
+                    <span class="slider"></span>
+                </label>
+                <span>Enable Focus Session (allow only sites matching allowed metadata)</span>
+            </div>
+            <div class="input-group" style="margin-top:10px;">
+                <input type="text" id="allowedTitleContains" placeholder="Allowed title contains (comma separated)">
+            </div>
+            <div class="input-group">
+                <input type="text" id="allowedDescContains" placeholder="Allowed description contains (comma separated)">
+            </div>
+            <div class="input-group">
+                <input type="text" id="allowedKeywordsContains" placeholder="Allowed keywords contains (comma separated)">
+            </div>
+            <div class="quick-actions">
+                <button id="saveFocusSettings" class="btn-primary">Save Focus Settings</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>📚 Focus Long Mode (Topic-Based Study)</h3>
+            <div class="toggle-group">
+                <label for="focusLongToggle">Enable Focus Long Mode:</label>
+                <input type="checkbox" id="focusLongToggle">
+                <span class="toggle-label" id="focusLongStatus">OFF</span>
+            </div>
+            <p class="help-text">AI-powered mode that only allows content related to your study topics</p>
+            
+            <div class="input-group">
+                <input type="text" id="focusLongTopic" placeholder="e.g., Data Mining, Machine Learning, Python">
+                <button id="addFocusLongTopic" class="btn-secondary">Add Topic</button>
+            </div>
+            
+            <div class="site-list" id="focusLongTopicsList"></div>
+            
+            <div class="input-group">
+                <label for="semanticThreshold">Relevance Threshold:</label>
+                <input type="range" id="semanticThreshold" min="0.3" max="0.9" step="0.1" value="0.7">
+                <span id="thresholdValue">0.7</span>
+            </div>
+            <p class="help-text">Higher = stricter filtering (0.7 recommended)</p>
+            
+            <div class="quick-actions">
+                <button id="saveFocusLongSettings" class="btn-primary">Save Focus Long Settings</button>
+                <button id="clearFocusLongTopics" class="btn-danger">Clear All Topics</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🚫 Blocked Sites (Manual)</h3>
+            <div class="input-group">
+                <input type="text" id="newBlockedSite" placeholder="e.g., youtube.com">
+                <button id="addBlockedSite" class="btn-secondary">Add</button>
+            </div>
+            <div class="site-list" id="blockedSitesList"></div>
+        </div>
+
+        <div class="section">
+            <h3>✅ Allowed Sites (Whitelist)</h3>
+            <div class="input-group">
+                <input type="text" id="newAllowedSite" placeholder="e.g., stackoverflow.com">
+                <button id="addAllowedSite" class="btn-secondary">Add</button>
+            </div>
+            <div class="site-list" id="allowedSitesList"></div>
+        </div>
+
+        <div class="section">
+            <h3>📈 Recent Activity</h3>
+            <div class="activity-list" id="recentActivity">
+                <p class="no-activity">No recent blocks</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🐛 Debug Console</h3>
+            <div class="debug-controls">
+                <button id="clearDebugLogs" class="btn-secondary">Clear Logs</button>
+                <button id="refreshDebugLogs" class="btn-secondary">Refresh</button>
+                <button id="openConsole" class="btn-primary">Open Browser Console</button>
+            </div>
+            <div class="debug-console" id="debugConsole">
+                <p class="no-activity">No debug logs yet. Navigate to a website to see activity.</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🗓️ Focus Sessions (Presets)</h3>
+            <div class="input-group">
+                <input type="text" id="presetName" placeholder="Preset name (e.g., Algorithms Study)">
+            </div>
+            <div class="input-group">
+                <input type="text" id="presetDomains" placeholder="Allowed domains (e.g., your-course.org, developer.mozilla.org)">
+            </div>
+            <div class="input-group">
+                <input type="text" id="presetTopics" placeholder="Allowed keywords (comma separated)">
+            </div>
+            <div class="input-group">
+                <input type="number" id="presetMaxExtraDomains" placeholder="Max extra domains (beyond allowed list)" min="0" value="0">
+            </div>
+            <div class="input-group">
+                <input type="number" id="presetDuration" placeholder="Duration (minutes)" min="5" value="50">
+                <button id="savePreset" class="btn-secondary">Save Preset</button>
+            </div>
+            <div class="site-list" id="presetsList"></div>
+        </div>
+
+
+
+        <div class="section">
+            <h3>🧾 Session History</h3>
+            <div class="site-list" id="historyList"></div>
+        </div>
+
+        <div class="section">
+            <h3>🛡️ Extension Protection</h3>
+            <div class="quick-actions">
+                <button id="checkExtensionStatus" class="btn-secondary">Check Status</button>
+                <button id="forceReEnable" class="btn-secondary">Force Re-enable</button>
+                <button id="openExtensionsPage" class="btn-secondary">Open Extensions Page</button>
+            </div>
+            <p class="help-text">Monitor and protect extension from being disabled.</p>
+        </div>
+
+        <div class="section">
+            <h3>⚡ Quick Actions</h3>
+            <div class="quick-actions">
+                <button id="clearData" class="btn-danger">Clear All Data</button>
+                <button id="exportSettings" class="btn-secondary">Export Settings</button>
+                <button id="openDashboard" class="btn-primary">🖥️ Open Dashboard</button>
+            </div>
+        </div>
+
+        <footer>
+            <p>Made with ❤️ for productivity</p>
+            <p class="version">v1.0.0</p>
+        </footer>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html> 

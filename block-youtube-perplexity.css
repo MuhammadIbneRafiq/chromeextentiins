@@ -1,0 +1,47 @@
+/* Block all YouTube iframes and embeds on Perplexity */
+iframe[src*="youtube.com"],
+iframe[src*="youtu.be"],
+iframe[src*="youtube-nocookie.com"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Hide YouTube video containers */
+[href*="youtube.com"],
+[href*="youtu.be"] {
+  display: none !important;
+}
+
+/* Hide YouTube thumbnails */
+img[src*="ytimg.com"],
+img[src*="youtube.com"],
+img[src*="youtu.be"] {
+  display: none !important;
+}
+
+/* Hide any element with YouTube in data attributes */
+[data-video-id*="youtube"],
+[data-src*="youtube.com"],
+[data-src*="youtu.be"] {
+  display: none !important;
+}
+
+/* Block video players that might contain YouTube */
+video[src*="youtube"],
+video[src*="youtu.be"] {
+  display: none !important;
+}
+
+/* Block Google Images thumbnails and preview images */
+/* Grid thumbnails on Google Images */
+#islrg img,
+.islrc img,
+a[href*="imgurl="] img,
+/* Large preview image in the side panel / viewer */
+#Sva75c img {
+  display: none !important;
+  visibility: hidden !important;
+}

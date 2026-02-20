@@ -1,0 +1,7 @@
+.env
+config.js
+*.key
+*.secret
+test-api.ps1
+build/
+dist/
