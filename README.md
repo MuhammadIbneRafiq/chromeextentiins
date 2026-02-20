@@ -1,6 +1,6 @@
 # AI Productivity Guardian - or as the name suggests 'chromeextentiins'
 
-besides being an open source attempt that began with a typo as when i was building it to fight my procrastination habit, i was procrastinating to spell 'chrome exntension' correctly...but u guessed it, its a Chrome extension designed to enhance focus and productivity through intelligent content filtering and analytics-and whatever chat suggested a banger of a line < insert them here >
+besides being an open source attempt that began with a typo as when i was building it to fight my procrastination habit, i was procrastinating to spell 'chrome exntension' correctly...but u guessed it, its a Chrome extension designed to enhance focus and productivity through intelligent content filtering and analytics-and whatever banger of a line chat suggested  < insert them here >
 
 ## Overview
 
