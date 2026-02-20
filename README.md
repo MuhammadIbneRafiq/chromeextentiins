@@ -123,10 +123,22 @@ npm run build
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Support
+## 🙏 Acknowledgments
 
-For issues, questions, or feature requests, please open an issue on GitHub.
+- **Groq** - For providing fast AI inference capabilities
+- **Google Calendar API** - For seamless schedule integration
+- **Chrome Extension API** - For powerful browser automation
+- **Open Source Community** - For inspiration and tools
+
+## 🔮 Roadmap
+
+- [ ] Mobile app companion
+- [ ] Team/family plans
+- [ ] Advanced analytics dashboard
+- [ ] Integration with more calendar services
+- [ ] Voice control capabilities
+- [ ] Machine learning model improvements
 
 ---
 
-**Note**: This extension is designed to enhance productivity and should be used responsibly. The AI analysis is intended to assist users in maintaining focus, not to enforce strict content blocking without user control.
+**Extension Guardian** - *Your AI-powered productivity companion* 🚀
