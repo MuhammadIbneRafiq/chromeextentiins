@@ -24,7 +24,7 @@
   ],
   
   "background": {
-    "service_worker": "background.js",
+    "service_worker": "src/background/background.js",
     "type": "module"
   },
   
@@ -32,30 +32,30 @@
     {
       "matches": ["<all_urls>"],
       "exclude_matches": ["*://tue.video.yuja.com/*"],
-      "js": ["content.js"],
+      "js": ["src/content/content.js"],
       "run_at": "document_start"
     },
     {
       "matches": ["<all_urls>"],
       "exclude_matches": ["*://tue.video.yuja.com/*", "chrome://*/*", "chrome-extension://*/*"],
-      "js": ["cursor-tracker.js"],
+      "js": ["src/content/cursor-tracker.js"],
       "run_at": "document_idle"
     },
     {
       "matches": ["*://*.perplexity.ai/*"],
-      "css": ["block-youtube-perplexity.css"],
+      "css": ["src/content/block-youtube-perplexity.css"],
       "run_at": "document_start"
     }
   ],
   
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "src/popup/popup.html",
     "default_title": "AI Productivity Guardian",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "32": "icons/icon32.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "src/icons/icon16.png",
+      "32": "src/icons/icon32.png",
+      "48": "src/icons/icon48.png",
+      "128": "src/icons/icon128.png"
     }
   },
   
@@ -68,7 +68,7 @@
   
   "web_accessible_resources": [
     {
-      "resources": ["block-page.html", "dashboard.html", "dashboard.css", "dashboard.js", "icons/*"],
+      "resources": ["src/content/block-page.html", "dashboard.html", "dashboard.css", "dashboard.js", "src/icons/*"],
       "matches": ["<all_urls>"]
     }
   ],
@@ -77,12 +77,12 @@
       {
         "id": "rules_yt_on_google",
         "enabled": true,
-        "path": "rules_yt_on_google.json"
+        "path": "src/rules/rules_yt_on_google.json"
       },
       {
         "id": "rules_yt_on_perplexity",
         "enabled": true,
-        "path": "rules_yt_on_perplexity.json"
+        "path": "src/rules/rules_yt_on_perplexity.json"
       }
     ]
   }

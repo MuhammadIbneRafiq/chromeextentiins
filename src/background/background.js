@@ -99,7 +99,7 @@ class ProductivityGuardian {
     if (!this.groqApiKey) {
       try {
         // Import environment loader
-        const { getEnv } = await import('./env-loader.js');
+        const { getEnv } = await import('../utils/env-loader.js');
         const envApiKey = getEnv('groq_api_key');
         
         if (envApiKey && envApiKey.startsWith('gsk_')) {
@@ -139,7 +139,7 @@ class ProductivityGuardian {
     // Initialize Advanced AI Analyzer
     if (this.groqApiKey && this.useAdvancedAnalysis) {
       try {
-        const { AdvancedAIAnalyzer } = await import('./advanced-ai-analysis.js');
+        const { AdvancedAIAnalyzer } = await import('../analytics/advanced-ai-analysis.js');
         this.advancedAI = new AdvancedAIAnalyzer(this.groqApiKey, this.groqApiUrl);
         this.log('🧠 Advanced AI Analyzer initialized');
       } catch (error) {
@@ -283,7 +283,7 @@ class ProductivityGuardian {
     }
 
     try {
-      const { FocusAnalytics } = await import('./focus-analytics.js');
+      const { FocusAnalytics } = await import('../analytics/focus-analytics.js');
       this.focusAnalytics = new FocusAnalytics();
       
       const success = this.focusAnalytics.startFocusSession(config);

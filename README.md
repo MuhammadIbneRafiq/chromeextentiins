@@ -1,196 +1,132 @@
-# Extension Guardian - AI-Powered Chrome Extension
+# AI Productivity Guardian
 
-## 🚀 First-Ever AI-Powered Chrome Extension with Smart Control
+A Chrome extension designed to enhance focus and productivity through intelligent content filtering and analytics.
 
-Extension Guardian is the **world's first AI-powered Chrome extension** that combines intelligent distraction management with a comprehensive webapp control system. Using advanced AI technology powered by Groq API, it provides unprecedented control over when and how you access distracting websites, while integrating seamlessly with your productivity workflow.
+## Overview
 
-## ✨ Key Features
+AI Productivity Guardian helps users maintain focus by automatically analyzing web content and blocking distracting sites. The extension uses AI-powered semantic analysis to determine if content is relevant to your study or work topics, providing a smart alternative to traditional keyword-based filtering.
 
-### 🤖 AI-Powered Intelligence
-- **Smart Rule Engine**: Leverages Groq API for intelligent decision-making about when to allow or block distractions
-- **Adaptive Scheduling**: AI learns from your patterns and suggests optimal focus times
-- **Context-Aware Blocking**: Understands your current tasks and adjusts restrictions accordingly
+## Features
 
-### 🌐 Webapp Control Center
-- **Time Window Management**: Set precise activation and deactivation schedules
-- **Rule Configuration**: Create sophisticated rules about when and how distractions are allowed
-- **Real-time Monitoring**: Live dashboard showing extension status and activity
-- **Remote Control**: Manage your extension settings from any device through the web interface
+### Core Functionality
+- **Smart Content Filtering**: Uses AI to analyze web pages for relevance to your study/work topics
+- **Semantic Analysis**: Goes beyond simple keyword matching to understand content context
+- **Named Entity Recognition**: Identifies people, organizations, and concepts in web content
+- **Focus Analytics**: Tracks time spent on different tabs and productivity metrics
+- **Cursor Activity Monitoring**: Analyzes user interaction patterns
+- **Tab Switching Analysis**: Monitors browsing patterns and distraction frequency
 
-### 📅 Google Calendar Integration
-- **Schedule Sync**: Connect to Google Calendar to see your upcoming tasks and appointments
-- **Task-Aware Blocking**: Automatically adjusts restriction levels based on your calendar events
-- **Smart Scheduling**: Plans focus periods around your existing commitments
-- **Meeting Mode**: Automatically relaxes restrictions during important meetings or breaks
+### Advanced Features
+- **Focus Long Mode**: Topic-based filtering using semantic similarity
+- **Focus Lock**: Prevents disabling the extension during focus sessions
+- **Session Management**: Pre-configured focus sessions with time limits
+- **Distraction Override**: Smart bypass system with justification requirements
+- **Real-time Analytics**: Live productivity tracking and reporting
 
-### 🎯 Advanced Distraction Management
-- **Site-Specific Rules**: Create custom rules for different websites (YouTube, social media, etc.)
-- **Time-Based Exceptions**: Allow limited access during specific time windows
-- **Productivity Mode**: Different restriction levels for work vs. personal time
-- **Emergency Override**: Quick access when truly needed with usage tracking
+### Integration Capabilities
+- **Groq API Integration**: Leverages Llama models for content analysis
+- **Environment Variable Support**: Secure API key management
+- **Webapp Control**: External dashboard for configuration (planned)
+- **Calendar Integration**: Schedule-aware distraction management (planned)
 
-### 🛡️ Multi-Layer Protection
-- **Chrome Extension**: Browser-level blocking and monitoring
-- **Desktop Application**: Native app for system-wide protection
-- **Watchdog Service**: Prevents tampering and ensures continuous operation
-- **Cross-Platform Sync**: Settings sync across all your devices
+## Installation
 
-## 🏗️ Architecture
-
-### Core Components
-- **Chrome Extension** (`manifest.json`, `content.js`, `popup.js`)
-- **Background Service** (`background.js`) - AI decision engine
-- **Desktop Guardian** (`extension-guardian-desktop.py`)
-- **Web Dashboard** (`dashboard.html`, `dashboard.js`)
-- **Native Messaging** (`native-messaging-host.py`)
-
-### AI Integration
-- **Groq API Integration**: Fast, efficient AI processing for rule evaluation
-- **Smart Decision Making**: AI analyzes context, calendar, and user patterns
-- **Learning Algorithm**: Improves recommendations over time
-- **Real-time Processing**: Instant decisions for seamless user experience
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Google Chrome browser
-- Python 3.7+ (for desktop components)
-- Groq API key (for AI features)
-- Google Calendar access (for calendar integration)
-
-### Installation
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/extension-guardian.git
-   cd extension-guardian
+1. Clone or download this repository
+2. Load the extension in Chrome (chrome://extensions/)
+3. Configure your Groq API key in the `.env` file:
    ```
-
-2. **Install Python dependencies**
-   ```bash
-   pip install -r requirements.txt
+   groq_api_key=your_groq_api_key_here
    ```
+4. Enable the extension and configure your focus topics
 
-3. **Set up environment variables**
-   ```bash
-   # Copy .env.example to .env and add your API keys
-   cp .env.example .env
-   ```
+## Usage
 
-4. **Install the Chrome extension**
-   - Open Chrome and navigate to `chrome://extensions/`
-   - Enable "Developer mode"
-   - Click "Load unpacked" and select the extension directory
+### Basic Setup
+1. Add your study or work topics in the Focus Long Mode section
+2. Set the relevance threshold (recommended: 0.7)
+3. Enable Focus Long Mode to activate AI-powered filtering
 
-5. **Start the desktop service**
-   ```bash
-   python extension-guardian-desktop.py
-   ```
+### Focus Sessions
+- Start a focus session to enable automatic content filtering
+- Use Focus Lock to prevent accidental disabling
+- Configure time limits for structured work periods
 
-6. **Access the web dashboard**
-   - Open `dashboard.html` in your browser
-   - Configure your initial settings and connect services
+### Analytics
+- Start focus analytics to track productivity metrics
+- View detailed session reports with insights
+- Monitor tab switching patterns and cursor activity
 
-### Configuration
-1. **Groq API Setup**
-   - Get your API key from [Groq](https://groq.com/)
-   - Add it to your `.env` file
-   - Test the connection in the dashboard
+## Configuration
 
-2. **Google Calendar Integration**
-   - Authorize access in the dashboard
-   - Select calendars to sync
-   - Configure event-based rules
-
-3. **Rule Creation**
-   - Use the web dashboard to create custom rules
-   - Set time windows for different restriction levels
-   - Configure site-specific exceptions
-
-## 📱 Usage
-
-### Chrome Extension
-- **Popup Interface**: Quick access to settings and status
-- **Content Blocking**: Automatic blocking based on AI decisions
-- **Usage Tracking**: Monitor your browsing patterns
-
-### Web Dashboard
-- **Schedule Management**: Set focus periods and break times
-- **Rule Editor**: Create sophisticated blocking rules
-- **Calendar View**: See your schedule alongside restriction settings
-- **Analytics**: Track productivity and distraction patterns
-
-### Desktop Application
-- **System Protection**: Prevents bypassing browser restrictions
-- **Service Management**: Start/stop protection services
-- **Log Monitoring**: View detailed activity logs
-
-## 🔧 Advanced Features
-
-### AI Rule Examples
-```javascript
-// Allow YouTube during lunch breaks
-if (isLunchBreak() && isYouTube()) {
-  allowLimitedAccess(30); // 30 minutes
-}
-
-// Block social media during work hours
-if (isWorkHours() && isSocialMedia()) {
-  blockAccess();
-}
-
-// Relax restrictions after completing important tasks
-if (completedImportantTask()) {
-  allowBreakTime(15);
-}
+### Environment Setup
+Create a `.env` file in the root directory:
+```env
+groq_api_key=your_groq_api_key_here
 ```
 
-### Calendar Integration
-- **Meeting Detection**: Automatically identify meetings from calendar
-- **Task Priority**: Adjust restrictions based on task importance
-- **Buffer Time**: Add focus periods before important events
+### Extension Settings
+- **Focus Long Topics**: Add subjects you're studying or working on
+- **Semantic Threshold**: Adjust strictness of content filtering (0.3-0.9)
+- **Blocked Sites**: Manually block specific websites
+- **Allowed Sites**: Create whitelist for essential resources
 
-### Custom Rules
-- **Time-Based**: Different rules for morning, afternoon, evening
-- **Location-Based**: Adjust based on work/home location
-- **Productivity-Based**: Stricter rules during high-focus periods
+## Architecture
 
-## 🤝 Contributing
+```
+src/
+├── background/           # Service worker and core logic
+├── content/            # Content scripts for page analysis
+├── popup/              # Extension popup interface
+├── analytics/          # Focus analytics and AI modules
+├── utils/              # Utility functions and helpers
+├── icons/              # Extension icons and assets
+├── rules/              # Declarative blocking rules
+├── config/             # Configuration files
+└── tests/              # Test scripts and utilities
+```
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+## Security
 
-### Development Setup
+- **No Hardcoded Secrets**: All API keys loaded from environment variables
+- **Secure Storage**: Configuration stored in browser storage
+- **Privacy-First**: All analytics data processed locally
+- **Open Source**: Full code transparency and auditability
+
+## Development
+
+### Environment Setup
+```bash
+# Install dependencies
+npm install
+
+# Run tests
+npm test
+
+# Build extension
+npm run build
+```
+
+### File Structure
+- `src/background/background.js`: Main service worker
+- `src/analytics/`: AI analysis modules
+- `src/content/`: Page interaction scripts
+- `src/popup/`: User interface components
+
+## Contributing
+
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+3. Submit pull requests with clear descriptions
+4. Follow the established code style and structure
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🙏 Acknowledgments
+## Support
 
-- **Groq** - For providing fast AI inference capabilities
-- **Google Calendar API** - For seamless schedule integration
-- **Chrome Extension API** - For powerful browser automation
-- **Open Source Community** - For inspiration and tools
-
-## 📞 Support
-
-- **Documentation**: See our [Wiki](https://github.com/yourusername/extension-guardian/wiki)
-- **Issues**: Report bugs via [GitHub Issues](https://github.com/yourusername/extension-guardian/issues)
-- **Discussions**: Join our [Community Discussions](https://github.com/yourusername/extension-guardian/discussions)
-
-## 🔮 Roadmap
-
-- [ ] Mobile app companion
-- [ ] Team/family plans
-- [ ] Advanced analytics dashboard
-- [ ] Integration with more calendar services
-- [ ] Voice control capabilities
-- [ ] Machine learning model improvements
+For issues, questions, or feature requests, please open an issue on GitHub.
 
 ---
 
-**Extension Guardian** - *Your AI-powered productivity companion* 🚀
+**Note**: This extension is designed to enhance productivity and should be used responsibly. The AI analysis is intended to assist users in maintaining focus, not to enforce strict content blocking without user control.

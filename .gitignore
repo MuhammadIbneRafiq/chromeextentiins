@@ -5,3 +5,4 @@ config.js
 test-api.ps1
 build/
 dist/
+.build_venv/
