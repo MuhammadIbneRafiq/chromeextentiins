@@ -9,7 +9,7 @@ extension_guardian_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(extension_guardian_module)
 ExtensionGuardian = extension_guardian_module.ExtensionGuardian
 
-extension_id = 'dhmlefmojipiigjhjifnohilekhmbbag'
+extension_id = 'cefohabdfmncmcilofdoodoaibcaakbc'
 
 app = ExtensionGuardian.__new__(ExtensionGuardian)
 app.config = {

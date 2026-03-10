@@ -27,7 +27,7 @@ The consecutive counter is at **1400+** because the extension has been genuinely
 
 1. **Open Brave**
 2. Go to `brave://extensions/`
-3. Find your extension (`dhmlefmojipiigjhjifnohilekhmbbag`)
+3. Find your extension (`cefohabdfmncmcilofdoodoaibcaakbc`)
 4. **Toggle it ON** if it's off
 5. **Enable "Allow in Incognito"** if it's not checked
 
