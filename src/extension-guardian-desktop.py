@@ -200,7 +200,7 @@ def run_browser_blocker_cli(watch=False, interval=10):
         return res
 
 class ExtensionGuardian:
-    FORCED_EXTENSION_ID = "dhmlefmojipiigjhjifnohilekhmbbag"
+    FORCED_EXTENSION_ID = "cefohabdfmncmcilofdoodoaibcaakbc"
     
     def __init__(self, background_mode=True):
         self.root = tk.Tk()

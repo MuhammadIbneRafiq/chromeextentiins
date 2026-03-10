@@ -1,0 +1,53 @@
+[
+  {
+    "id": 1,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "initiatorDomains": ["perplexity.ai", "www.perplexity.ai"],
+      "requestDomains": [
+        "youtube.com",
+        "www.youtube.com",
+        "m.youtube.com",
+        "youtube-nocookie.com",
+        "www.youtube-nocookie.com",
+        "i.ytimg.com",
+        "ytimg.com",
+        "yt3.ggpht.com",
+        "googlevideo.com",
+        "youtu.be"
+      ],
+      "resourceTypes": ["sub_frame", "xmlhttprequest", "media", "image", "script", "other"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "initiatorDomains": ["perplexity.ai", "www.perplexity.ai"],
+      "urlFilter": "*youtube.com*",
+      "resourceTypes": ["sub_frame", "xmlhttprequest", "media", "image", "script", "other"]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "initiatorDomains": ["perplexity.ai", "www.perplexity.ai"],
+      "urlFilter": "*youtu.be*",
+      "resourceTypes": ["sub_frame", "xmlhttprequest", "media", "image", "script", "other"]
+    }
+  },
+  {
+    "id": 4,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "initiatorDomains": ["perplexity.ai", "www.perplexity.ai"],
+      "urlFilter": "*ytimg.com*",
+      "resourceTypes": ["image", "other"]
+    }
+  }
+]

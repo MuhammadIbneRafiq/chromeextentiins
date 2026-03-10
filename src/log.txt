@@ -52,9 +52,9 @@ PS C:\Users\wifi stuff\OneDrive - TU Eindhoven\chromeextentiins> python .\extens
 2026-01-01 03:21:56,909 - DEBUG - Importing XVThumbImagePlugin
 2026-01-01 03:27:47,734 - DEBUG - [SCAN] Error reading Preferences for profile 'Default': [Errno 13] Permission denied: 'C:\\Users\\wifi stuff\\AppData\\Local\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Preferences'
 2026-01-01 03:27:47,735 - DEBUG - [SCAN] Error reading Preferences for profile 'Default': [Errno 13] Permission denied: 'C:\\Users\\wifi stuff\\AppData\\Local\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Preferences'
-2026-01-01 03:27:47,736 - WARNING - [SCAN FALSE] Extension dhmlefmojipiigjhjifnohilekhmbbag not present in any profile under C:\Users\wifi stuff\AppData\Local\BraveSoftware\Brave-Browser\User Data
+2026-01-01 03:27:47,736 - WARNING - [SCAN FALSE] Extension cefohabdfmncmcilofdoodoaibcaakbc not present in any profile under C:\Users\wifi stuff\AppData\Local\BraveSoftware\Brave-Browser\User Data
 2026-01-01 03:27:47,736 - WARNING - EXTENSION DISABLED in brave.exe (PID: 16704)
-2026-01-01 03:27:47,737 - WARNING - [SCAN FALSE] Extension dhmlefmojipiigjhjifnohilekhmbbag not present in any profile under C:\Users\wifi stuff\AppData\Local\BraveSoftware\Brave-Browser\User Data
+2026-01-01 03:27:47,737 - WARNING - [SCAN FALSE] Extension cefohabdfmncmcilofdoodoaibcaakbc not present in any profile under C:\Users\wifi stuff\AppData\Local\BraveSoftware\Brave-Browser\User Data
 2026-01-01 03:27:47,738 - WARNING - EXTENSION DISABLED in brave.exe (PID: 16612)
 2026-01-01 03:27:47,832 - DEBUG - [CHECK CYCLE] Complete - Browsers found: 38, Checks performed: True, Extension disabled: True
 2026-01-01 03:27:47,832 - WARNING - EXTENSION DISABLED DETECTED - TRIGGERING BROWSER SHUTDOWN
